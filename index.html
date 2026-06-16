@@ -3,210 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.4 – плавный трек, автоцентр</title>
+    <title>Велокомпьютер v2.5</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#000000">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body {
-            font-family: 'Helvetica Neue', sans-serif;
-            background: #000;
-            color: #fff;
-            overflow: hidden;
-            -webkit-tap-highlight-color: transparent;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-        }
-        #map {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-        .center-btn {
-            position: absolute;
-            bottom: 15px;
-            right: 15px;
-            z-index: 1000;
-            background: rgba(30,30,30,0.85);
-            backdrop-filter: blur(10px);
-            border-radius: 50%;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.3);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            color: white;
-        }
-        .status-panel {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            align-items: flex-end;
-        }
-        .status-box {
-            background: rgba(20,20,20,0.75);
-            backdrop-filter: blur(6px);
-            border-radius: 10px;
-            padding: 6px 10px;
-            font-size: 12px;
-            color: #ccc;
-            border: 1px solid rgba(255,255,255,0.2);
-            pointer-events: none;
-            white-space: nowrap;
-        }
-        .auto-center-btn {
-            background: rgba(30,30,30,0.85);
-            backdrop-filter: blur(10px);
-            border-radius: 8px;
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            pointer-events: auto;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-        .auto-center-btn.active {
-            background: rgba(76,175,80,0.7);
-        }
-        .dashboard {
-            position: absolute;
-            left: 0; right: 0; bottom: 0;
-            background: #111;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 -5px 15px rgba(0,0,0,0.6);
-        }
-        .tab-bar {
-            display: flex;
-            border-bottom: 1px solid #333;
-            background: #1a1a1a;
-        }
-        .tab-btn {
-            flex: 1;
-            background: transparent;
-            color: #aaa;
-            border: none;
-            padding: 12px;
-            font-size: 16px;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-        }
-        .tab-btn.active {
-            color: #fff;
-            border-bottom: 2px solid #4CAF50;
-            background: #111;
-        }
-        .tab-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            scrollbar-width: thin;
-        }
-        .hidden { display: none !important; }
-        .stats-panel {
-            background: linear-gradient(145deg, #1e1e1e, #181818);
-            border-radius: 12px;
-            padding: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        }
-        .stats-row {
-            display: flex;
-            justify-content: space-around;
-            margin-bottom: 8px;
-        }
-        .stats-row:last-child { margin-bottom: 0; }
-        .stat-cell { text-align: center; flex: 1; }
-        .stat-value { font-size: 26px; font-weight: bold; }
-        .stat-label { font-size: 11px; color: #aaa; margin-top: 2px; }
-        .speed-chart-container {
-            background: #1a1a1a;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
-        }
-        canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
-        .gps-monitor {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 6px;
-            padding: 0 4px;
-        }
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            padding: 10px;
-            background: #111;
-            border-top: 1px solid #333;
-        }
-        button {
-            font-size: 15px;
-            padding: 8px 18px;
-            border: none;
-            border-radius: 20px;
-            background: #4CAF50;
-            color: white;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-        button:active { transform: scale(0.95); }
-        button:disabled { background: #555; box-shadow: none; }
-        button.stop { background: #f44336; }
-        button.small {
-            font-size: 12px;
-            padding: 4px 12px;
-            background: #333;
-            margin-left: 5px;
-        }
-        .history-date {
-            font-size: 13px;
-            font-weight: bold;
-            margin: 12px 0 5px;
-            color: #ccc;
-            border-bottom: 1px solid #333;
-            padding-bottom: 3px;
-        }
-        .history-item {
-            background: linear-gradient(145deg, #1e1e1e, #181818);
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .history-item .actions { display: flex; gap: 4px; }
+        body { font-family: 'Helvetica Neue', sans-serif; background: #000; color: #fff; overflow: hidden; position: fixed; top:0; left:0; right:0; bottom:0; }
+        #map { position: absolute; top:0; left:0; right:0; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .map-controls { position: absolute; bottom:15px; right:15px; z-index:1000; display: flex; flex-direction: column; gap: 8px; }
+        .center-btn, .auto-center-btn { width:44px; height:44px; border-radius:50%; background: rgba(30,30,30,0.85); backdrop-filter: blur(10px); border:1px solid rgba(255,255,255,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; color:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.5); }
+        .auto-center-btn { font-size:20px; }
+        .auto-center-btn.active { background: rgba(76,175,80,0.7); }
+        .status-panel { position: absolute; top:10px; right:10px; z-index:1000; display: flex; flex-direction: column; gap:4px; align-items: flex-end; }
+        .status-box { background: rgba(20,20,20,0.75); backdrop-filter: blur(6px); border-radius:10px; padding:6px 10px; font-size:12px; color:#ccc; border:1px solid rgba(255,255,255,0.2); white-space:nowrap; }
+        .dashboard { position: absolute; left:0; right:0; bottom:0; background:#111; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -5px 15px rgba(0,0,0,0.6); }
+        .tab-bar { display:flex; border-bottom:1px solid #333; background:#1a1a1a; }
+        .tab-btn { flex:1; background:transparent; color:#aaa; border:none; padding:12px; font-size:16px; cursor:pointer; text-align:center; }
+        .tab-btn.active { color:#fff; border-bottom:2px solid #4CAF50; background:#111; }
+        .tab-content { flex:1; overflow-y:auto; padding:12px; }
+        .hidden { display:none !important; }
+        .stats-panel { background: linear-gradient(145deg, #1e1e1e, #181818); border-radius:12px; padding:10px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.4); }
+        .stats-row { display:flex; justify-content:space-around; margin-bottom:8px; }
+        .stats-row:last-child { margin-bottom:0; }
+        .stat-cell { text-align:center; flex:1; }
+        .stat-value { font-size:26px; font-weight:bold; }
+        .stat-label { font-size:11px; color:#aaa; margin-top:2px; }
+        .speed-chart-container { background:#1a1a1a; border-radius:10px; padding:8px; margin-top:8px; }
+        canvas { width:100%; height:auto; display:block; border-radius:6px; }
+        .gps-monitor { display:flex; justify-content:space-between; font-size:12px; color:#aaa; margin-top:6px; padding:0 4px; }
+        .controls { display:flex; justify-content:center; gap:12px; padding:10px; background:#111; border-top:1px solid #333; }
+        button { font-size:15px; padding:8px 18px; border:none; border-radius:20px; background:#4CAF50; color:#fff; cursor:pointer; font-weight:600; box-shadow:0 2px 5px rgba(0,0,0,0.3); }
+        button:active { transform:scale(0.95); }
+        button:disabled { background:#555; box-shadow:none; }
+        button.stop { background:#f44336; }
+        button.small { font-size:12px; padding:4px 12px; background:#333; margin-left:5px; }
+        .history-date { font-size:13px; font-weight:bold; margin:12px 0 5px; color:#ccc; border-bottom:1px solid #333; padding-bottom:3px; }
+        .history-item { background: linear-gradient(145deg, #1e1e1e, #181818); border-radius:8px; padding:10px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; font-size:13px; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
+        .history-item .actions { display:flex; gap:4px; }
+        .backup-btns { display:flex; gap:8px; margin-bottom:10px; }
     </style>
 </head>
 <body>
     <div id="map">
-        <div class="center-btn" id="centerBtn">📍</div>
+        <div class="map-controls">
+            <div class="center-btn" id="centerBtn">📍</div>
+            <div class="auto-center-btn active" id="autoCenterBtn">🔒</div>
+        </div>
         <div class="status-panel">
-            <div class="auto-center-btn active" id="autoCenterBtn" title="Автоцентр">🔒</div>
-            <div class="status-box" id="statusBox">
+            <div class="status-box">
                 <span id="gpsAge">GPS: 0с</span> |
                 <span id="netStatus">Сеть: ...</span>
             </div>
@@ -243,8 +86,13 @@
             </div>
         </div>
         <div class="tab-content hidden" id="tab-history">
+            <div class="backup-btns">
+                <button class="small" id="exportHistoryBtn">💾 Экспорт</button>
+                <button class="small" id="importHistoryBtn">📂 Импорт</button>
+                <button class="small" id="clearHistoryBtn">Очистить</button>
+            </div>
             <div id="historyList"></div>
-            <button class="small" id="clearHistoryBtn" style="margin-top:10px;">Очистить историю</button>
+            <input type="file" id="importFileInput" accept=".json" style="display:none">
         </div>
         <div class="controls">
             <button id="startBtn">▶ Старт</button>
@@ -255,23 +103,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <script>
-        /* =========================================
-           Велокомпьютер v2.4 – плавный трек, автоцентр
-        ========================================= */
+        // ======================  Велокомпьютер v2.5  ============================
 
         // ---------- Динамическая высота ----------
         function setLayout() {
             const h = window.innerHeight || document.documentElement.clientHeight;
             const mapHeight = Math.floor(h * 0.6);
-            const panelHeight = h - mapHeight;
             document.getElementById('map').style.height = mapHeight + 'px';
-            document.getElementById('dashboard').style.height = panelHeight + 'px';
+            document.getElementById('dashboard').style.height = (h - mapHeight) + 'px';
         }
         window.addEventListener('resize', setLayout);
         window.addEventListener('orientationchange', () => setTimeout(setLayout, 50));
         setLayout();
 
-        // ---------- Карта ----------
+        // ---------- Карта (спутник ESRI) ----------
         const satelliteLayer = new ol.layer.Tile({
             source: new ol.source.TileImage({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -309,17 +154,17 @@
         let totalClimb = 0, lastAltitude = null;
         let coordBuffer = [], lastFlush = 0;
         let speedHistory = [];
-        let rawTrackPoints = [];      // для GPX — только надёжные точки
-        let allRawPoints = [];        // все точки, включая неточные (для полного трека в истории)
+        let rawTrackPoints = [];      // точные точки для GPX
+        let allRawPoints = [];        // все точки для полного трека
         let lastGpsTimestamp = null;
-        let autoCenter = true;        // флаг автоцентрирования
+        let autoCenter = true;
 
-        const MIN_ACCURACY = 20;      // точность, при которой данные считаются надёжными
-        const MAX_ACCURACY_FOR_MAP = 100; // добавляем точки на карту, если точность <= 100 м
+        const MIN_ACCURACY = 20;            // порог точности для учёта статистики
+        const MAX_ACCURACY_FOR_MAP = 100;   // добавляем на карту, если точность <= 100 м
         const MAX_SPEED_KMH = 100;
         const CHART_MAX_POINTS = 60;
 
-        // DOM элементы
+        // DOM-элементы
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -338,6 +183,9 @@
         const netStatusEl = document.getElementById('netStatus');
         const historyListEl = document.getElementById('historyList');
         const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const exportHistoryBtn = document.getElementById('exportHistoryBtn');
+        const importHistoryBtn = document.getElementById('importHistoryBtn');
+        const importFileInput = document.getElementById('importFileInput');
         const chartCanvas = document.getElementById('speedChart');
 
         // ---------- Автоцентр ----------
@@ -382,18 +230,13 @@
             window.addEventListener('offline', () => netStatusEl.textContent = 'Сеть: офлайн');
             checkPing();
         }
-        function stopNetworkMonitor() {
-            if (networkInterval) { clearInterval(networkInterval); networkInterval = null; }
-        }
+        function stopNetworkMonitor() { if (networkInterval) clearInterval(networkInterval); }
         function checkPing() {
             if (!navigator.onLine) { netStatusEl.textContent = 'Сеть: офлайн'; return; }
             const start = performance.now();
             fetch('https://server.arcgisonline.com/', { method: 'HEAD', cache: 'no-store' })
-            .then(() => {
-                const ping = Math.round(performance.now() - start);
-                netStatusEl.textContent = `Пинг: ${ping}ms`;
-            })
-            .catch(() => { netStatusEl.textContent = 'Сеть: нет ответа'; });
+            .then(() => netStatusEl.textContent = `Пинг: ${Math.round(performance.now() - start)}ms`)
+            .catch(() => netStatusEl.textContent = 'Сеть: нет ответа');
         }
 
         // ---------- График скорости ----------
@@ -416,7 +259,6 @@
             ctx.beginPath();
             ctx.strokeStyle = '#4CAF50';
             ctx.lineWidth = 2;
-            ctx.lineJoin = 'round';
             for (let i = 0; i < chartData.length; i++) {
                 const x = i * stepX;
                 const y = h - (chartData[i] / maxVal) * (h - 10) - 5;
@@ -427,9 +269,7 @@
             const gradient = ctx.createLinearGradient(0, 0, 0, h);
             gradient.addColorStop(0, 'rgba(76,175,80,0.3)');
             gradient.addColorStop(1, 'rgba(76,175,80,0)');
-            ctx.lineTo(w, h);
-            ctx.lineTo(0, h);
-            ctx.closePath();
+            ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
             ctx.fillStyle = gradient;
             ctx.fill();
         }
@@ -442,10 +282,7 @@
                 const start = Math.max(0, i - Math.floor(windowSize / 2));
                 const end = Math.min(coords.length - 1, i + Math.floor(windowSize / 2));
                 let sumLon = 0, sumLat = 0;
-                for (let j = start; j <= end; j++) {
-                    sumLon += coords[j][0];
-                    sumLat += coords[j][1];
-                }
+                for (let j = start; j <= end; j++) { sumLon += coords[j][0]; sumLat += coords[j][1]; }
                 const count = end - start + 1;
                 smoothed.push([sumLon / count, sumLat / count]);
             }
@@ -456,13 +293,12 @@
             if (coordBuffer.length === 0) return;
             const currentCoords = trackLine.getCoordinates();
             coordBuffer.forEach(c => currentCoords.push([c[0], c[1]]));
-            const smoothed = smoothLine(currentCoords, 3);
-            trackLine.setCoordinates(smoothed);
+            trackLine.setCoordinates(smoothLine(currentCoords, 3));
             coordBuffer = [];
             lastFlush = Date.now();
         }
 
-        // ---------- Утилиты ----------
+        // ---------- Гео-утилиты ----------
         function toRad(d) { return d * Math.PI / 180; }
         function haversine(p1, p2) {
             const R = 6371e3;
@@ -471,37 +307,29 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // ---------- GPS ----------
+        // ---------- Обработка GPS ----------
         function processPosition(pos) {
             lastGpsTimestamp = pos.timestamp;
             const accuracy = pos.coords.accuracy;
             gpsAccuracyEl.textContent = `Точность: ${accuracy ? Math.round(accuracy) + ' м' : '...'}`;
 
-            // Всегда обновляем возраст, даже если точность плохая
             const alt = pos.coords.altitude || null;
             const newPoint = { lat: pos.coords.latitude, lng: pos.coords.longitude, alt, accuracy };
 
-            // Проверяем, можно ли добавить точку на карту (даже с плохой точностью, но не слишком далеко)
             let addToMap = false;
             if (accuracy <= MAX_ACCURACY_FOR_MAP) {
                 if (lastPoint) {
-                    const dist = haversine(lastPoint, newPoint);
-                    // Игнорируем точки, если они дальше 200 метров (ошибка GPS)
-                    if (dist <= 200) addToMap = true;
-                } else {
-                    // Самая первая точка — добавляем, если точность не хуже 50 м
-                    if (accuracy <= 50) addToMap = true;
+                    if (haversine(lastPoint, newPoint) <= 200) addToMap = true;
+                } else if (accuracy <= 50) {
+                    addToMap = true;
                 }
             }
 
-            // Если точка подходит для карты, добавляем её в буфер
             if (addToMap) {
-                const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
-                coordBuffer.push(coord);
-                allRawPoints.push(newPoint); // для истории (полный трек)
+                coordBuffer.push(ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]));
+                allRawPoints.push(newPoint);
             }
 
-            // Расчёт статистики только для надёжных точек
             if (accuracy <= MIN_ACCURACY) {
                 let speedKmh = (pos.coords.speed >= 0 ? pos.coords.speed : 0) * 3.6;
                 if (speedKmh > MAX_SPEED_KMH || speedKmh < 0) return;
@@ -520,115 +348,96 @@
                     const dist = haversine(lastPoint, newPoint);
                     if (dist <= 200) {
                         totalDist += dist;
-                        if (lastPoint.alt !== null && alt !== null && alt - lastPoint.alt > 2) {
-                            totalClimb += alt - lastPoint.alt;
-                        }
+                        if (lastPoint.alt !== null && alt !== null && alt - lastPoint.alt > 2) totalClimb += alt - lastPoint.alt;
                     }
                 }
                 curDistEl.textContent = (totalDist / 1000).toFixed(2);
                 curClimbEl.textContent = Math.round(totalClimb);
-                lastPoint = newPoint; // обновляем lastPoint только для точной точки
-                rawTrackPoints.push({ lat: newPoint.lat, lng: newPoint.lng, alt });
+                lastPoint = newPoint;
+
+                rawTrackPoints.push({
+                    lat: newPoint.lat, lng: newPoint.lng, alt,
+                    time: new Date(pos.timestamp).toISOString()
+                });
                 gpsPointsEl.textContent = `Точек: ${rawTrackPoints.length}`;
                 updateChart(smooth);
-            } else if (addToMap) {
-                // Точка не точная, но на карту добавили. lastPoint не обновляем, чтобы дистанция считалась от последней надёжной
-                // Ничего не делаем, lastPoint остаётся прежним
             }
-
-            // Если точность стала приемлемой после перерыва – lastPoint всё ещё старый, дистанция накопится в следующей итерации
         }
 
         function addTrackPoint(lon, lat) {
-            if (coordBuffer.length >= 3 || (coordBuffer.length && Date.now() - lastFlush > 2000)) {
-                flushTrackBuffer();
-            }
+            if (coordBuffer.length >= 3 || (coordBuffer.length && Date.now() - lastFlush > 2000)) flushTrackBuffer();
             const coord = ol.proj.fromLonLat([lon, lat]);
             markerFeature.setGeometry(new ol.geom.Point(coord));
-            if (autoCenter) {
-                map.getView().animate({ center: coord, duration: 300 });
-            }
+            if (autoCenter) map.getView().animate({ center: coord, duration: 300 });
         }
 
         function onGPS(pos) {
             if (!isRecording || isPaused) return;
             processPosition(pos);
-            // Если буфер не пустой, вызываем addTrackPoint для отрисовки
-            if (coordBuffer.length > 0 && (coordBuffer.length >= 3 || Date.now() - lastFlush > 2000)) {
+            if (coordBuffer.length && (coordBuffer.length >= 3 || Date.now() - lastFlush > 2000))
                 addTrackPoint(pos.coords.longitude, pos.coords.latitude);
-            }
         }
         function onGPSError(err) {
-            console.warn('GPS watch error', err.message);
+            console.warn('GPS error', err.message);
             gpsAgeEl.textContent = `GPS: ошибка (${err.message})`;
         }
 
-        // ---------- Управление ----------
+        // ---------- Управление поездкой ----------
         function startTrip() {
             if (!navigator.geolocation) return;
             startBtn.disabled = true;
             startBtn.textContent = '⏳';
             curSpeedEl.textContent = '0';
-            chartData = [];
-            drawChart();
+            chartData = []; drawChart();
+
             setTimeout(() => {
-                navigator.geolocation.getCurrentPosition(
-                    pos => {
-                        isRecording = true; isPaused = false;
-                        tripStart = Date.now();
-                        totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0;
-                        totalClimb = 0; lastAltitude = null;
-                        lastPoint = null; speedHistory = [];
-                        rawTrackPoints = [];
-                        allRawPoints = [];
-                        trackLine.setCoordinates([]);
-                        coordBuffer = []; lastFlush = Date.now();
-                        lastGpsTimestamp = pos.timestamp;
+                navigator.geolocation.getCurrentPosition(pos => {
+                    isRecording = true; isPaused = false;
+                    tripStart = Date.now();
+                    totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0;
+                    totalClimb = 0; lastAltitude = null;
+                    lastPoint = null; speedHistory = [];
+                    rawTrackPoints = []; allRawPoints = [];
+                    trackLine.setCoordinates([]);
+                    coordBuffer = []; lastFlush = Date.now();
+                    lastGpsTimestamp = pos.timestamp;
 
-                        const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
-                        markerFeature.setGeometry(new ol.geom.Point(coord));
-                        map.getView().setCenter(coord);
+                    const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+                    markerFeature.setGeometry(new ol.geom.Point(coord));
+                    map.getView().setCenter(coord);
 
-                        gpsAccuracyEl.textContent = 'Точность: запрос...';
-                        gpsPointsEl.textContent = 'Точек: 0';
-                        startAgeUpdater();
-                        startTimer();
-                        watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
-                            enableHighAccuracy: true, maximumAge: 500, timeout: 10000
-                        });
-                        updateButtons();
-                        gpxCurrentBtn.disabled = false;
-                        startBtn.textContent = '▶ Старт';
-                    },
-                    err => {
-                        startBtn.textContent = '▶ Старт';
-                        startBtn.disabled = false;
-                        if (err.code === 1) {
-                            alert('Нет доступа к геолокации. Проверьте настройки браузера.');
-                        } else if (err.code === 3) {
-                            gpsAccuracyEl.textContent = 'Точность: таймаут';
-                        } else {
-                            gpsAgeEl.textContent = `GPS: ${err.message}`;
-                        }
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                );
+                    gpsAccuracyEl.textContent = 'Точность: запрос...';
+                    gpsPointsEl.textContent = 'Точек: 0';
+                    startAgeUpdater();
+                    startTimer();
+                    watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+                        enableHighAccuracy: true, maximumAge: 500, timeout: 10000
+                    });
+                    updateButtons();
+                    gpxCurrentBtn.disabled = false;
+                    startBtn.textContent = '▶ Старт';
+                }, err => {
+                    startBtn.textContent = '▶ Старт';
+                    startBtn.disabled = false;
+                    if (err.code === 1) alert('Нет доступа к геолокации. Проверьте настройки браузера.');
+                    else if (err.code === 3) gpsAccuracyEl.textContent = 'Точность: таймаут';
+                    else gpsAgeEl.textContent = `GPS: ${err.message}`;
+                }, { enableHighAccuracy: true, timeout: 10000 });
             }, 50);
         }
 
         function pauseTrip() {
             isPaused = true;
             if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-            stopTimer();
-            stopAgeUpdater();
+            stopTimer(); stopAgeUpdater();
             updateButtons();
         }
         function resumeTrip() {
             if (!isRecording || !isPaused) return;
             isPaused = false;
-            watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 });
-            startTimer();
-            startAgeUpdater();
+            watchId = navigator.geolocation.watchPosition(onGPS, onGPSError,
+                { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 });
+            startTimer(); startAgeUpdater();
             updateButtons();
         }
         function stopTrip() {
@@ -640,23 +449,18 @@
                     avgSpeed: speedCount ? speedSum / speedCount : 0,
                     maxSpeed: maxSpeed,
                     climb: totalClimb,
-                    track: rawTrackPoints.slice(),   // точные точки для GPX
-                    fullTrack: allRawPoints.slice(), // все точки для отображения в истории (опционально)
+                    track: rawTrackPoints.slice(),
                     pointsCount: rawTrackPoints.length
                 });
             }
             if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-            stopTimer();
-            stopAgeUpdater();
+            stopTimer(); stopAgeUpdater();
             isRecording = false; isPaused = false;
             totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0; totalClimb = 0;
             lastPoint = null; speedHistory = [];
-            rawTrackPoints = [];
-            allRawPoints = [];
+            rawTrackPoints = []; allRawPoints = [];
             trackLine.setCoordinates([]);
-            coordBuffer = [];
-            chartData = [];
-            lastGpsTimestamp = null;
+            coordBuffer = []; chartData = []; lastGpsTimestamp = null;
             curSpeedEl.textContent = '0'; curDistEl.textContent = '0.00';
             curTimeEl.textContent = '00:00'; curAvgEl.textContent = '0.0';
             curMaxEl.textContent = '0.0'; curClimbEl.textContent = '0';
@@ -677,13 +481,16 @@
             pauseBtn.style.background = isPaused ? '#ff9800' : '#f44336';
         }
 
-        // ---------- Экспорт GPX ----------
+        // ---------- Экспорт GPX (с временем) ----------
         function generateGPX(points) {
             if (!points || points.length < 2) return null;
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
             gpx += '<gpx version="1.1" creator="velo" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>Поездка</name><trkseg>\n';
             points.forEach(p => {
-                gpx += `    <trkpt lat="${p.lat.toFixed(8)}" lon="${p.lng.toFixed(8)}">${p.alt ? `<ele>${p.alt.toFixed(1)}</ele>` : ''}</trkpt>\n`;
+                gpx += `    <trkpt lat="${p.lat.toFixed(8)}" lon="${p.lng.toFixed(8)}">\n`;
+                if (p.alt) gpx += `      <ele>${p.alt.toFixed(1)}</ele>\n`;
+                if (p.time) gpx += `      <time>${p.time}</time>\n`;
+                gpx += `    </trkpt>\n`;
             });
             gpx += '  </trkseg></trk>\n</gpx>';
             return gpx;
@@ -698,44 +505,62 @@
         }
         function exportCurrentGPX() {
             const gpx = generateGPX(rawTrackPoints);
-            if (gpx) downloadGPX(gpx);
-            else alert('Недостаточно точек');
+            if (gpx) downloadGPX(gpx); else alert('Недостаточно точек');
         }
 
-        // ---------- История ----------
+        // ---------- История (localStorage) ----------
         const HISTORY_KEY = 'velo_rides_v2';
         function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; } }
         function saveRide(ride) {
             const history = getHistory();
-            // Для экономии места в localStorage сохраняем только точные точки трека
-            if (ride.track && ride.track.length > 5000) {
+            if (ride.track && ride.track.length > 5000)
                 ride.track = ride.track.filter((_, i) => i % Math.ceil(ride.track.length / 5000) === 0);
-            }
             history.push(ride);
             history.sort((a,b) => b.date - a.date);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
             renderHistory();
         }
         function deleteRide(index) {
-            const history = getHistory();
-            history.splice(index, 1);
+            const history = getHistory(); history.splice(index, 1);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
             renderHistory();
         }
         function clearHistory() {
-            if (confirm('Удалить всю историю?')) {
-                localStorage.removeItem(HISTORY_KEY);
-                renderHistory();
-            }
+            if (confirm('Удалить всю историю?')) { localStorage.removeItem(HISTORY_KEY); renderHistory(); }
         }
         function exportHistoryGPX(index) {
             const history = getHistory();
-            const ride = history[index];
-            if (!ride || !ride.track) return alert('Нет данных трека');
-            const gpx = generateGPX(ride.track);
-            if (gpx) downloadGPX(gpx);
+            if (history[index]?.track) downloadGPX(generateGPX(history[index].track));
+            else alert('Нет данных трека');
         }
 
+        // ---------- Бекап всей истории ----------
+        function exportAllHistory() {
+            const history = getHistory();
+            if (!history.length) { alert('Нет поездок'); return; }
+            const json = JSON.stringify(history, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'velo_backup.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        function importAllHistory(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) throw new Error('Неверный формат');
+                    data.forEach(ride => { if (!ride.date || typeof ride.distance !== 'number') throw new Error('Неверная структура'); });
+                    localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+                    renderHistory();
+                    alert('История импортирована');
+                } catch (err) { alert('Ошибка: ' + err.message); }
+            };
+            reader.readAsText(file);
+        }
+
+        // ---------- Отрисовка истории ----------
         function renderHistory() {
             const history = getHistory();
             if (!history.length) {
@@ -753,10 +578,9 @@
                 const min = Math.floor(ride.duration / 60);
                 const sec = ride.duration % 60;
                 const timeStr = `${min}:${sec.toString().padStart(2,'0')}`;
-                const pointsInfo = ride.pointsCount || ride.track?.length || 0;
                 html += `<div class="history-item">
                     <div>
-                        <div>🚴 ${distKm} км | ⏱ ${timeStr} | 📍 ${pointsInfo} точек</div>
+                        <div>🚴 ${distKm} км | ⏱ ${timeStr} | 📍 ${ride.pointsCount || ride.track?.length || 0} точек</div>
                         <div style="font-size:11px; color:#aaa;">Ср. ${ride.avgSpeed.toFixed(1)} км/ч, макс ${ride.maxSpeed.toFixed(1)}, набор ${ride.climb} м</div>
                     </div>
                     <div class="actions">
@@ -785,6 +609,11 @@
         resetBtn.addEventListener('click', stopTrip);
         gpxCurrentBtn.addEventListener('click', exportCurrentGPX);
         clearHistoryBtn.addEventListener('click', clearHistory);
+        exportHistoryBtn.addEventListener('click', exportAllHistory);
+        importHistoryBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) { importAllHistory(e.target.files[0]); e.target.value = ''; }
+        });
         centerBtn.addEventListener('click', () => {
             if (!navigator.geolocation) return;
             navigator.geolocation.getCurrentPosition(pos => {
