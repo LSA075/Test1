@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v6 – спутник, график, история</title>
+    <title>Велокомпьютер v2 – спутник, график, история</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -40,6 +40,26 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             color: white;
         }
+
+        /* Панель статуса в верхнем правом углу */
+        .status-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(20,20,20,0.75);
+            backdrop-filter: blur(6px);
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #ccc;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            border: 1px solid rgba(255,255,255,0.2);
+            pointer-events: none;
+        }
+        .status-panel span { white-space: nowrap; }
 
         .dashboard {
             position: absolute;
@@ -109,6 +129,15 @@
         }
         canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
 
+        .gps-monitor {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 6px;
+            padding: 0 4px;
+        }
+
         .controls {
             display: flex;
             justify-content: center;
@@ -164,6 +193,11 @@
 <body>
     <div id="map">
         <div class="center-btn" id="centerBtn">📍</div>
+        <!-- Панель статуса GPS и сети -->
+        <div class="status-panel" id="statusPanel">
+            <span id="gpsAge">GPS: 0с</span>
+            <span id="netStatus">Сеть: ...</span>
+        </div>
     </div>
 
     <div class="dashboard" id="dashboard">
@@ -188,6 +222,10 @@
             <div class="speed-chart-container">
                 <canvas id="speedChart" width="320" height="80"></canvas>
             </div>
+            <div class="gps-monitor">
+                <span id="gpsAccuracy">Точность: -- м</span>
+                <span id="gpsPoints">Точек: 0</span>
+            </div>
             <div style="display:flex; justify-content:flex-end; margin-top:8px;">
                 <button class="small" id="gpxCurrentBtn" disabled>GPX</button>
             </div>
@@ -209,11 +247,10 @@
     <script>
         /* ==============================
            Вторая тестовая версия
-           (гарантированное сохранение истории,
-            полные точки для GPX, фильтр скорости)
+           (панель статуса GPS/сеть в углу)
         ================================ */
 
-        // ---------- Динамическая высота ----------
+        // Динамическая высота
         function setLayout() {
             const h = window.innerHeight || document.documentElement.clientHeight;
             const mapHeight = Math.floor(h * 0.6);
@@ -225,7 +262,7 @@
         window.addEventListener('orientationchange', () => setTimeout(setLayout, 50));
         setLayout();
 
-        // ---------- Карта ----------
+        // Карта
         const satelliteLayer = new ol.layer.Tile({
             source: new ol.source.TileImage({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -241,7 +278,7 @@
         map.addControl(new ol.control.Zoom({ zoomInLabel: '+', zoomOutLabel: '−' }));
         map.addControl(new ol.control.Attribution({ collapsible: false }));
 
-        // ---------- Трек и маркер ----------
+        // Трек и маркер
         const trackLine = new ol.geom.LineString([]);
         const trackFeature = new ol.Feature({ geometry: trackLine });
         const trackSource = new ol.source.Vector({ features: [trackFeature] });
@@ -256,17 +293,18 @@
         }));
         map.addLayer(new ol.layer.Vector({ source: new ol.source.Vector({ features: [markerFeature] }) }));
 
-        // ---------- Состояние ----------
+        // Состояние
         let isRecording = false, isPaused = false, watchId = null;
         let tripStart = null, totalDist = 0, lastPoint = null;
         let maxSpeed = 0, speedSum = 0, speedCount = 0;
         let totalClimb = 0, lastAltitude = null;
         let coordBuffer = [], lastFlush = 0;
         let speedHistory = [];
-        let rawTrackPoints = [];  // массив { lat, lng, alt }
+        let rawTrackPoints = [];
+        let lastGpsTimestamp = null; // для возраста GPS
 
         const MIN_ACCURACY = 20;
-        const MAX_SPEED_KMH = 100; // отсекаем ложные скачки
+        const MAX_SPEED_KMH = 100;
         const CHART_MAX_POINTS = 60;
 
         // DOM
@@ -283,11 +321,16 @@
         const curMaxEl = document.getElementById('curMax');
         const curClimbEl = document.getElementById('curClimb');
 
+        const gpsAccuracyEl = document.getElementById('gpsAccuracy');
+        const gpsPointsEl = document.getElementById('gpsPoints');
+        const gpsAgeEl = document.getElementById('gpsAge');
+        const netStatusEl = document.getElementById('netStatus');
+
         const historyListEl = document.getElementById('historyList');
         const clearHistoryBtn = document.getElementById('clearHistoryBtn');
         const chartCanvas = document.getElementById('speedChart');
 
-        // ---------- Таймер ----------
+        // Таймер
         let timerInterval = null;
         function startTimer() { stopTimer(); timerInterval = setInterval(updateTimeDisplay, 1000); }
         function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
@@ -297,7 +340,54 @@
             curTimeEl.textContent = new Date(sec * 1000).toISOString().substr(14, 5);
         }
 
-        // ---------- График скорости ----------
+        // Обновление возраста GPS (каждые 2 секунды, чтобы не дёргать)
+        let ageUpdateInterval = null;
+        function startAgeUpdater() {
+            if (ageUpdateInterval) clearInterval(ageUpdateInterval);
+            ageUpdateInterval = setInterval(updateGpsAge, 2000);
+        }
+        function stopAgeUpdater() {
+            if (ageUpdateInterval) { clearInterval(ageUpdateInterval); ageUpdateInterval = null; }
+            gpsAgeEl.textContent = 'GPS: --';
+        }
+        function updateGpsAge() {
+            if (!lastGpsTimestamp) {
+                gpsAgeEl.textContent = 'GPS: нет';
+                return;
+            }
+            const age = Math.round((Date.now() - lastGpsTimestamp) / 1000);
+            gpsAgeEl.textContent = `GPS: ${age}с`;
+        }
+
+        // Пинг сети
+        let networkInterval = null;
+        function startNetworkMonitor() {
+            if (networkInterval) clearInterval(networkInterval);
+            networkInterval = setInterval(checkPing, 5000);
+            window.addEventListener('online', () => netStatusEl.textContent = 'Сеть: онлайн');
+            window.addEventListener('offline', () => netStatusEl.textContent = 'Сеть: офлайн');
+            checkPing(); // сразу
+        }
+        function stopNetworkMonitor() {
+            if (networkInterval) { clearInterval(networkInterval); networkInterval = null; }
+        }
+        function checkPing() {
+            if (!navigator.onLine) {
+                netStatusEl.textContent = 'Сеть: офлайн';
+                return;
+            }
+            const start = performance.now();
+            fetch('https://tile.openstreetmap.ru/', { method: 'HEAD', cache: 'no-store' })
+            .then(() => {
+                const ping = Math.round(performance.now() - start);
+                netStatusEl.textContent = `Пинг: ${ping}ms`;
+            })
+            .catch(() => {
+                netStatusEl.textContent = 'Сеть: ошибка';
+            });
+        }
+
+        // График скорости
         let chartData = [];
         function updateChart(speedKmh) {
             chartData.push(speedKmh);
@@ -335,7 +425,7 @@
             ctx.fill();
         }
 
-        // ---------- Утилиты ----------
+        // Утилиты
         function toRad(d) { return d * Math.PI / 180; }
         function haversine(p1, p2) {
             const R = 6371e3;
@@ -344,13 +434,16 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // ---------- GPS ----------
+        // GPS
         function processPosition(pos) {
-            if (pos.coords.accuracy > MIN_ACCURACY) return false;
+            lastGpsTimestamp = pos.timestamp;
+            const accuracy = pos.coords.accuracy;
+            gpsAccuracyEl.textContent = `Точность: ${accuracy ? Math.round(accuracy) + ' м' : '...'}`;
 
-            const speedKmh = (pos.coords.speed >= 0 ? pos.coords.speed : 0) * 3.6;
-            // Игнорируем нереалистичную скорость
-            if (speedKmh > MAX_SPEED_KMH) return false;
+            if (accuracy > MIN_ACCURACY) return false;
+
+            let speedKmh = (pos.coords.speed >= 0 ? pos.coords.speed : 0) * 3.6;
+            if (speedKmh > MAX_SPEED_KMH || speedKmh < 0) return false;
 
             const alt = pos.coords.altitude || null;
 
@@ -376,8 +469,8 @@
                 curClimbEl.textContent = Math.round(totalClimb);
             }
             lastPoint = newPoint;
-            // Сохраняем сырую точку для GPX
             rawTrackPoints.push({ lat: newPoint.lat, lng: newPoint.lng, alt });
+            gpsPointsEl.textContent = `Точек: ${rawTrackPoints.length}`;
             updateChart(smooth);
             return true;
         }
@@ -403,13 +496,16 @@
         }
         function onGPSError(err) { console.warn('GPS error', err.message); }
 
-        // ---------- Управление ----------
+        // Управление
         function startTrip() {
             if (!navigator.geolocation) {
                 alert('Геолокация не поддерживается');
                 return;
             }
             startBtn.disabled = true;
+            curSpeedEl.textContent = '0';
+            chartData = [];
+            drawChart();
             navigator.geolocation.getCurrentPosition(
                 pos => {
                     isRecording = true; isPaused = false;
@@ -420,11 +516,15 @@
                     rawTrackPoints = [];
                     trackLine.setCoordinates([]);
                     coordBuffer = []; lastFlush = Date.now();
-                    chartData = [];
+                    lastGpsTimestamp = pos.timestamp;
 
                     const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
                     markerFeature.setGeometry(new ol.geom.Point(coord));
                     map.getView().setCenter(coord);
+
+                    gpsAccuracyEl.textContent = 'Точность: запрос...';
+                    gpsPointsEl.textContent = 'Точек: 0';
+                    startAgeUpdater();
 
                     startTimer();
                     watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
@@ -445,6 +545,7 @@
             isPaused = true;
             if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
             stopTimer();
+            stopAgeUpdater();
             updateButtons();
         }
         function resumeTrip() {
@@ -452,11 +553,11 @@
             isPaused = false;
             watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, { enableHighAccuracy: true, maximumAge: 500, timeout: 10000 });
             startTimer();
+            startAgeUpdater();
             updateButtons();
         }
         function stopTrip() {
-            // Сохраняем поездку, если была хотя бы одна точка
-            if (isRecording && rawTrackPoints.length > 0) {
+            if (isRecording) {
                 saveRide({
                     date: tripStart,
                     duration: Math.floor((Date.now() - tripStart) / 1000),
@@ -468,9 +569,9 @@
                     pointsCount: rawTrackPoints.length
                 });
             }
-            // Полный сброс
             if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
             stopTimer();
+            stopAgeUpdater();
             isRecording = false; isPaused = false;
             totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0; totalClimb = 0;
             lastPoint = null; speedHistory = [];
@@ -478,9 +579,12 @@
             trackLine.setCoordinates([]);
             coordBuffer = [];
             chartData = [];
+            lastGpsTimestamp = null;
             curSpeedEl.textContent = '0'; curDistEl.textContent = '0.00';
             curTimeEl.textContent = '00:00'; curAvgEl.textContent = '0.0';
             curMaxEl.textContent = '0.0'; curClimbEl.textContent = '0';
+            gpsAccuracyEl.textContent = 'Точность: -- м';
+            gpsPointsEl.textContent = 'Точек: 0';
             markerFeature.setGeometry(new ol.geom.Point([0,0]));
             drawChart();
             updateButtons();
@@ -496,7 +600,7 @@
             pauseBtn.style.background = isPaused ? '#ff9800' : '#f44336';
         }
 
-        // ---------- Экспорт GPX ----------
+        // Экспорт GPX
         function generateGPX(points) {
             if (!points || points.length < 2) return null;
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -521,12 +625,11 @@
             else alert('Недостаточно точек');
         }
 
-        // ---------- История (localStorage) ----------
+        // История
         const HISTORY_KEY = 'velo_rides_v2';
         function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; } }
         function saveRide(ride) {
             const history = getHistory();
-            // Ограничим размер хранимого трека (5000 точек), чтобы не переполнять localStorage
             if (ride.track && ride.track.length > 5000) {
                 ride.track = ride.track.filter((_, i) => i % Math.ceil(ride.track.length / 5000) === 0);
             }
@@ -566,8 +669,6 @@
             let curDate = '';
             history.forEach((ride, idx) => {
                 const d = new Date(ride.date);
-                const ds = fmt.format(d);
-                // Группировка по дням
                 const dayKey = new Intl.DateTimeFormat('ru', { day:'numeric', month:'long', year:'numeric' }).format(d);
                 if (dayKey !== curDate) {
                     curDate = dayKey;
@@ -581,7 +682,7 @@
                 html += `<div class="history-item">
                     <div>
                         <div>🚴 ${distKm} км | ⏱ ${timeStr} | 📍 ${pointsInfo} точек</div>
-                        <div style="font-size:11px; color:#aaa;">Средняя ${ride.avgSpeed.toFixed(1)} км/ч, макс ${ride.maxSpeed.toFixed(1)}, набор ${ride.climb} м</div>
+                        <div style="font-size:11px; color:#aaa;">Ср. ${ride.avgSpeed.toFixed(1)} км/ч, макс ${ride.maxSpeed.toFixed(1)}, набор ${ride.climb} м</div>
                     </div>
                     <div class="actions">
                         <button class="small" onclick="exportHistoryGPX(${idx})">GPX</button>
@@ -592,7 +693,7 @@
             historyListEl.innerHTML = html;
         }
 
-        // ---------- Вкладки ----------
+        // Вкладки
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -603,7 +704,7 @@
             });
         });
 
-        // ---------- Кнопки ----------
+        // Кнопки
         startBtn.addEventListener('click', startTrip);
         pauseBtn.addEventListener('click', () => isPaused ? resumeTrip() : pauseTrip());
         resetBtn.addEventListener('click', stopTrip);
@@ -619,6 +720,8 @@
         });
 
         // Инициализация
+        startNetworkMonitor();
+        stopAgeUpdater(); // до записи
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
                 const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
