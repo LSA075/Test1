@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v4 – спутник, график, история</title>
+    <title>Велокомпьютер v5 – спутник, график, история</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -11,21 +11,17 @@
             font-family: 'Helvetica Neue', sans-serif;
             background: #000;
             color: #fff;
-            height: 100dvh; /* динамический viewport */
-            display: flex;
-            flex-direction: column;
             overflow: hidden;
-            padding-bottom: env(safe-area-inset-bottom);
             -webkit-tap-highlight-color: transparent;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
         }
-
         #map {
-            flex: 6; /* 60% */
-            width: 100%;
-            position: relative;
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            /* высота будет задаваться через JS */
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
-
         .center-btn {
             position: absolute;
             bottom: 15px;
@@ -47,7 +43,8 @@
         }
 
         .dashboard {
-            flex: 4; /* 40% */
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
             background: #111;
             display: flex;
             flex-direction: column;
@@ -85,21 +82,26 @@
         }
         .hidden { display: none !important; }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .stat-item {
+        /* Новый макет статистики: 3 столбца, 2 строки */
+        .stats-panel {
             background: linear-gradient(145deg, #1e1e1e, #181818);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 10px;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
-        .stat-value { font-size: 24px; font-weight: bold; color: #fff; }
-        .stat-label { font-size: 11px; color: #aaa; margin-top: 4px; }
+        .stats-row {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 8px;
+        }
+        .stats-row:last-child { margin-bottom: 0; }
+        .stat-cell {
+            text-align: center;
+            flex: 1;
+        }
+        .stat-value { font-size: 26px; font-weight: bold; }
+        .stat-label { font-size: 11px; color: #aaa; margin-top: 2px; }
 
         .speed-chart-container {
             background: #1a1a1a;
@@ -166,21 +168,43 @@
         <div class="center-btn" id="centerBtn">📍</div>
     </div>
 
-    <div class="dashboard">
+    <div class="dashboard" id="dashboard">
         <div class="tab-bar">
             <button class="tab-btn active" data-tab="current">Поездка</button>
             <button class="tab-btn" data-tab="history">История</button>
         </div>
 
-        <!-- Текущая поездка -->
         <div class="tab-content" id="tab-current">
-            <div class="stats-grid">
-                <div class="stat-item"><div class="stat-value" id="curSpeed">0</div><div class="stat-label">Скорость км/ч</div></div>
-                <div class="stat-item"><div class="stat-value" id="curDist">0.00</div><div class="stat-label">Дистанция км</div></div>
-                <div class="stat-item"><div class="stat-value" id="curTime">00:00</div><div class="stat-label">Время</div></div>
-                <div class="stat-item"><div class="stat-value" id="curAvg">0.0</div><div class="stat-label">Средняя км/ч</div></div>
-                <div class="stat-item"><div class="stat-value" id="curMax">0.0</div><div class="stat-label">Макс. км/ч</div></div>
-                <div class="stat-item"><div class="stat-value" id="curClimb">0</div><div class="stat-label">Набор высоты м</div></div>
+            <!-- 3 столбца, 2 строки -->
+            <div class="stats-panel">
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curTime">00:00</div>
+                        <div class="stat-label">Время</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curSpeed">0</div>
+                        <div class="stat-label">Скорость км/ч</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curDist">0.00</div>
+                        <div class="stat-label">Дистанция км</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curAvg">0.0</div>
+                        <div class="stat-label">Средняя</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curMax">0.0</div>
+                        <div class="stat-label">Макс. км/ч</div>
+                    </div>
+                    <div class="stat-cell">
+                        <div class="stat-value" id="curClimb">0</div>
+                        <div class="stat-label">Набор выс. м</div>
+                    </div>
+                </div>
             </div>
             <div class="speed-chart-container">
                 <canvas id="speedChart" width="320" height="80"></canvas>
@@ -190,7 +214,6 @@
             </div>
         </div>
 
-        <!-- История -->
         <div class="tab-content hidden" id="tab-history">
             <div id="historyList"></div>
             <button class="small" id="clearHistoryBtn" style="margin-top:10px;">Очистить историю</button>
@@ -207,8 +230,21 @@
     <script>
         /* ==============================
            Вторая тестовая версия
-           (график, GPX из истории, красота)
+           (исправлена для Яндекс.Браузера,
+            новый макет 3х2)
         ================================ */
+
+        // ---------- Динамическая высота ----------
+        function setLayout() {
+            const h = window.innerHeight || document.documentElement.clientHeight;
+            const mapHeight = Math.floor(h * 0.6);
+            const panelHeight = h - mapHeight;
+            document.getElementById('map').style.height = mapHeight + 'px';
+            document.getElementById('dashboard').style.height = panelHeight + 'px';
+        }
+        window.addEventListener('resize', setLayout);
+        window.addEventListener('orientationchange', () => setTimeout(setLayout, 50));
+        setLayout();
 
         // ---------- Карта ----------
         const satelliteLayer = new ol.layer.Tile({
@@ -249,12 +285,12 @@
         let totalClimb = 0, lastAltitude = null;
         let coordBuffer = [], lastFlush = 0;
         let speedHistory = [];
-        let rawTrackPoints = []; // для сохранения GPX: { lat, lng, alt? }
+        let rawTrackPoints = [];
 
         const MIN_ACCURACY = 20;
-        const CHART_MAX_POINTS = 60; // сколько точек скорости хранить для графика
+        const CHART_MAX_POINTS = 60;
 
-        // ---------- DOM ----------
+        // DOM
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -282,8 +318,8 @@
             curTimeEl.textContent = new Date(sec * 1000).toISOString().substr(14, 5);
         }
 
-        // ---------- График скорости (canvas) ----------
-        let chartData = []; // массив значений скорости км/ч
+        // ---------- График скорости ----------
+        let chartData = [];
         function updateChart(speedKmh) {
             chartData.push(speedKmh);
             if (chartData.length > CHART_MAX_POINTS) chartData.shift();
@@ -296,10 +332,8 @@
             const h = chartCanvas.height;
             ctx.clearRect(0, 0, w, h);
             if (chartData.length < 2) return;
-            // фон
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, w, h);
-            // линия
             const maxVal = Math.max(...chartData, 5);
             const stepX = w / (chartData.length - 1);
             ctx.beginPath();
@@ -313,7 +347,6 @@
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
-            // подложка градиентом
             const gradient = ctx.createLinearGradient(0, 0, 0, h);
             gradient.addColorStop(0, 'rgba(76,175,80,0.3)');
             gradient.addColorStop(1, 'rgba(76,175,80,0)');
@@ -339,7 +372,6 @@
             const speedKmh = (pos.coords.speed >= 0 ? pos.coords.speed : 0) * 3.6;
             const alt = pos.coords.altitude || null;
 
-            // сглаживание
             speedHistory.push(speedKmh);
             if (speedHistory.length > 3) speedHistory.shift();
             const smooth = speedHistory.reduce((a,b)=>a+b,0) / speedHistory.length;
@@ -437,7 +469,7 @@
                     avgSpeed: speedCount ? speedSum / speedCount : 0,
                     maxSpeed: maxSpeed,
                     climb: totalClimb,
-                    track: rawTrackPoints.slice() // сохраняем копию
+                    track: rawTrackPoints.slice()
                 });
             }
             if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
@@ -470,42 +502,32 @@
         function generateGPX(points) {
             if (!points || points.length < 2) return null;
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
-            gpx += '<gpx version="1.1" creator="velo" xmlns="http://www.topografix.com/GPX/1/1">\n';
-            gpx += '  <trk><name>Поездка</name><trkseg>\n';
+            gpx += '<gpx version="1.1" creator="velo" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk><name>Поездка</name><trkseg>\n';
             points.forEach(p => {
                 gpx += `    <trkpt lat="${p.lat.toFixed(8)}" lon="${p.lng.toFixed(8)}">${p.alt ? `<ele>${p.alt.toFixed(1)}</ele>` : ''}</trkpt>\n`;
             });
             gpx += '  </trkseg></trk>\n</gpx>';
             return gpx;
         }
-
         function downloadGPX(gpxString) {
             const blob = new Blob([gpxString], {type: 'application/gpx+xml'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'track.gpx';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            a.href = url; a.download = 'track.gpx';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-
         function exportCurrentGPX() {
             const gpx = generateGPX(rawTrackPoints);
             if (gpx) downloadGPX(gpx);
-            else alert('Недостаточно точек для экспорта');
+            else alert('Недостаточно точек');
         }
 
-        // ---------- История (localStorage) ----------
+        // ---------- История ----------
         const HISTORY_KEY = 'velo_rides_v2';
-        function getHistory() {
-            try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
-            catch(e) { return []; }
-        }
+        function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; } }
         function saveRide(ride) {
             const history = getHistory();
-            // ограничение размера трека (храним не более 5000 точек)
             if (ride.track && ride.track.length > 5000) {
                 ride.track = ride.track.filter((_, i) => i % Math.ceil(ride.track.length / 5000) === 0);
             }
@@ -532,7 +554,6 @@
             if (!ride || !ride.track) return alert('Нет данных трека');
             const gpx = generateGPX(ride.track);
             if (gpx) downloadGPX(gpx);
-            else alert('Ошибка экспорта');
         }
 
         function renderHistory() {
@@ -542,19 +563,16 @@
                 return;
             }
             let html = '';
-            const dateFormatter = new Intl.DateTimeFormat('ru', { day:'numeric', month:'long', year:'numeric' });
-            let currentDate = '';
+            const fmt = new Intl.DateTimeFormat('ru', { day:'numeric', month:'long', year:'numeric' });
+            let curDate = '';
             history.forEach((ride, idx) => {
                 const d = new Date(ride.date);
-                const dateStr = dateFormatter.format(d);
-                if (dateStr !== currentDate) {
-                    currentDate = dateStr;
-                    html += `<div class="history-date">${dateStr}</div>`;
-                }
+                const ds = fmt.format(d);
+                if (ds !== curDate) { curDate = ds; html += `<div class="history-date">${ds}</div>`; }
                 const distKm = (ride.distance / 1000).toFixed(1);
-                const timeMin = Math.floor(ride.duration / 60);
-                const timeSec = ride.duration % 60;
-                const timeStr = `${timeMin}:${timeSec.toString().padStart(2,'0')}`;
+                const min = Math.floor(ride.duration / 60);
+                const sec = ride.duration % 60;
+                const timeStr = `${min}:${sec.toString().padStart(2,'0')}`;
                 html += `<div class="history-item">
                     <div>
                         <div>${distKm} км | ${timeStr} | ср. ${ride.avgSpeed.toFixed(1)} км/ч</div>
@@ -580,7 +598,7 @@
             });
         });
 
-        // ---------- События кнопок ----------
+        // ---------- Кнопки ----------
         startBtn.addEventListener('click', startTrip);
         pauseBtn.addEventListener('click', () => isPaused ? resumeTrip() : pauseTrip());
         resetBtn.addEventListener('click', stopTrip);
