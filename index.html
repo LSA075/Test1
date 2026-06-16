@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.1 – финальный</title>
+    <title>Велокомпьютер v2.2 – с плавным треком</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -241,9 +241,7 @@
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <script>
         /* =========================================
-           Велокомпьютер v2.1 – финальная версия
-           (фильтр скорости, история, GPX, график,
-            панель GPS/сеть, без навязчивых alert)
+           Велокомпьютер v2.2 – с плавным треком
         ========================================= */
 
         // ---------- Динамическая высота ----------
@@ -410,6 +408,34 @@
             ctx.fill();
         }
 
+        // ---------- Сглаживание линии трека ----------
+        function smoothLine(coords, windowSize = 3) {
+            if (!coords || coords.length < windowSize) return coords;
+            const smoothed = [];
+            for (let i = 0; i < coords.length; i++) {
+                const start = Math.max(0, i - Math.floor(windowSize / 2));
+                const end = Math.min(coords.length - 1, i + Math.floor(windowSize / 2));
+                let sumLon = 0, sumLat = 0;
+                for (let j = start; j <= end; j++) {
+                    sumLon += coords[j][0];
+                    sumLat += coords[j][1];
+                }
+                const count = end - start + 1;
+                smoothed.push([sumLon / count, sumLat / count]);
+            }
+            return smoothed;
+        }
+
+        function flushTrackBuffer() {
+            if (coordBuffer.length === 0) return;
+            const currentCoords = trackLine.getCoordinates();
+            coordBuffer.forEach(c => currentCoords.push([c[0], c[1]]));
+            const smoothed = smoothLine(currentCoords, 3);
+            trackLine.setCoordinates(smoothed);
+            coordBuffer = [];
+            lastFlush = Date.now();
+        }
+
         // ---------- Утилиты ----------
         function toRad(d) { return d * Math.PI / 180; }
         function haversine(p1, p2) {
@@ -463,11 +489,7 @@
             const coord = ol.proj.fromLonLat([lon, lat]);
             coordBuffer.push(coord);
             if (coordBuffer.length >= 3 || (coordBuffer.length && Date.now() - lastFlush > 2000)) {
-                const coords = trackLine.getCoordinates();
-                coordBuffer.forEach(c => coords.push([c[0], c[1]]));
-                trackLine.setCoordinates(coords);
-                coordBuffer = [];
-                lastFlush = Date.now();
+                flushTrackBuffer();
             }
             markerFeature.setGeometry(new ol.geom.Point(coord));
             map.getView().setCenter(coord);
@@ -487,42 +509,53 @@
         function startTrip() {
             if (!navigator.geolocation) return;
             startBtn.disabled = true;
+            startBtn.textContent = '⏳';
             curSpeedEl.textContent = '0';
             chartData = [];
             drawChart();
-            navigator.geolocation.getCurrentPosition(
-                pos => {
-                    isRecording = true; isPaused = false;
-                    tripStart = Date.now();
-                    totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0;
-                    totalClimb = 0; lastAltitude = null;
-                    lastPoint = null; speedHistory = [];
-                    rawTrackPoints = [];
-                    trackLine.setCoordinates([]);
-                    coordBuffer = []; lastFlush = Date.now();
-                    lastGpsTimestamp = pos.timestamp;
 
-                    const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
-                    markerFeature.setGeometry(new ol.geom.Point(coord));
-                    map.getView().setCenter(coord);
+            setTimeout(() => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        isRecording = true; isPaused = false;
+                        tripStart = Date.now();
+                        totalDist = 0; maxSpeed = 0; speedSum = 0; speedCount = 0;
+                        totalClimb = 0; lastAltitude = null;
+                        lastPoint = null; speedHistory = [];
+                        rawTrackPoints = [];
+                        trackLine.setCoordinates([]);
+                        coordBuffer = []; lastFlush = Date.now();
+                        lastGpsTimestamp = pos.timestamp;
 
-                    gpsAccuracyEl.textContent = 'Точность: запрос...';
-                    gpsPointsEl.textContent = 'Точек: 0';
-                    startAgeUpdater();
-                    startTimer();
-                    watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
-                        enableHighAccuracy: true, maximumAge: 500, timeout: 10000
-                    });
-                    updateButtons();
-                    gpxCurrentBtn.disabled = false;
-                },
-                err => {
-                    gpsAgeEl.textContent = `GPS: ${err.message}`;
-                    startBtn.disabled = false;
-                    if (err.code === 3) gpsAccuracyEl.textContent = 'Точность: таймаут';
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
+                        const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+                        markerFeature.setGeometry(new ol.geom.Point(coord));
+                        map.getView().setCenter(coord);
+
+                        gpsAccuracyEl.textContent = 'Точность: запрос...';
+                        gpsPointsEl.textContent = 'Точек: 0';
+                        startAgeUpdater();
+                        startTimer();
+                        watchId = navigator.geolocation.watchPosition(onGPS, onGPSError, {
+                            enableHighAccuracy: true, maximumAge: 500, timeout: 10000
+                        });
+                        updateButtons();
+                        gpxCurrentBtn.disabled = false;
+                        startBtn.textContent = '▶ Старт';
+                    },
+                    err => {
+                        startBtn.textContent = '▶ Старт';
+                        startBtn.disabled = false;
+                        if (err.code === 1) {
+                            alert('Нет доступа к геолокации. Проверьте настройки браузера.');
+                        } else if (err.code === 3) {
+                            gpsAccuracyEl.textContent = 'Точность: таймаут';
+                        } else {
+                            gpsAgeEl.textContent = `GPS: ${err.message}`;
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            }, 50);
         }
 
         function pauseTrip() {
