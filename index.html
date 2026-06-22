@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.6 – просмотр GPX и треков из истории</title>
+    <title>Велокомпьютер v2.7 – цветной трек по скорости</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -85,7 +85,6 @@
             <div style="display:flex; justify-content:flex-end; margin-top:8px;">
                 <button class="small" id="gpxCurrentBtn" disabled>GPX</button>
             </div>
-            <!-- Сводка по загруженному GPX -->
             <div id="gpxSummary" class="gpx-summary"></div>
         </div>
         <div class="tab-content hidden" id="tab-history">
@@ -108,7 +107,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <script>
-        // ======================  Велокомпьютер v2.6  ============================
+        // ======================  Велокомпьютер v2.7  ============================
 
         // ---------- Динамическая высота ----------
         function setLayout() {
@@ -138,7 +137,6 @@
         map.addControl(new ol.control.Attribution({ collapsible: false }));
 
         // ---------- Слои трека ----------
-        // Текущий трек (голубой)
         const trackLine = new ol.geom.LineString([]);
         const trackFeature = new ol.Feature({ geometry: trackLine });
         const trackSource = new ol.source.Vector({ features: [trackFeature] });
@@ -147,14 +145,9 @@
             style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#0ff', width: 4 }) })
         }));
 
-        // Просматриваемый трек (оранжевый)
-        const viewTrackLine = new ol.geom.LineString([]);
-        const viewTrackFeature = new ol.Feature({ geometry: viewTrackLine });
-        const viewTrackSource = new ol.source.Vector({ features: [viewTrackFeature] });
-        map.addLayer(new ol.layer.Vector({
-            source: viewTrackSource,
-            style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#FF9800', width: 4, lineDash: [8,4] }) })
-        }));
+        // Просматриваемый трек (будет состоять из отдельных цветных сегментов)
+        const viewTrackSource = new ol.source.Vector();
+        map.addLayer(new ol.layer.Vector({ source: viewTrackSource }));
 
         const markerFeature = new ol.Feature(new ol.geom.Point([0,0]));
         markerFeature.setStyle(new ol.style.Style({
@@ -323,6 +316,14 @@
             const dLat = toRad(p2.lat - p1.lat), dLon = toRad(p2.lng - p1.lng);
             const a = Math.sin(dLat/2)**2 + Math.cos(toRad(p1.lat))*Math.cos(toRad(p2.lat))*Math.sin(dLon/2)**2;
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // ---------- Цвет по скорости ----------
+        function getSpeedColor(speedKmh) {
+            if (speedKmh < 5) return '#FF0000';   // красный
+            if (speedKmh < 12) return '#FF8800';  // оранжевый
+            if (speedKmh < 20) return '#FFDD00';  // жёлтый
+            return '#00CC44';                      // салатовый
         }
 
         // ---------- GPS ----------
@@ -549,7 +550,7 @@
             else alert('Нет данных трека');
         }
 
-        // ---------- Отображение трека из истории ----------
+        // ---------- Отображение трека из истории (с цветом по скорости) ----------
         function showHistoryTrack(index) {
             const history = getHistory();
             const ride = history[index];
@@ -557,15 +558,44 @@
                 alert('Недостаточно точек для отображения');
                 return;
             }
-            // Переключаемся на вкладку "Поездка"
+            viewTrackSource.clear();
             document.querySelector('.tab-btn[data-tab="current"]').click();
-            // Отрисовываем трек на просмотровом слое
-            const coords = ride.track.map(p => ol.proj.fromLonLat([p.lng, p.lat]));
-            viewTrackLine.setCoordinates(smoothLine(coords, 3));
-            // Центрируем карту на трек
-            const extent = viewTrackLine.getExtent();
+
+            const points = ride.track;
+            // Вычисляем скорости между точками
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                let speed = 0;
+                if (i > 0) {
+                    const prev = points[i-1];
+                    const dist = haversine(prev, p);
+                    let dt = 1;
+                    if (prev.time && p.time) {
+                        dt = (new Date(p.time) - new Date(prev.time)) / 1000;
+                        if (dt <= 0) dt = 1;
+                    }
+                    speed = dist / dt * 3.6;
+                }
+                p._calcSpeed = speed;
+            }
+
+            // Строим цветные отрезки
+            for (let i = 1; i < points.length; i++) {
+                const p1 = points[i-1];
+                const p2 = points[i];
+                const avgSpeed = (p1._calcSpeed + p2._calcSpeed) / 2;
+                const color = getSpeedColor(avgSpeed);
+                const coords = [ol.proj.fromLonLat([p1.lng, p1.lat]), ol.proj.fromLonLat([p2.lng, p2.lat])];
+                const segment = new ol.Feature({ geometry: new ol.geom.LineString(coords) });
+                segment.setStyle(new ol.style.Style({
+                    stroke: new ol.style.Stroke({ color: color, width: 4, lineCap: 'round' })
+                }));
+                viewTrackSource.addFeature(segment);
+            }
+
+            const extent = viewTrackSource.getExtent();
             map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 500 });
-            // Краткая сводка
+
             const distKm = (ride.distance / 1000).toFixed(2);
             const min = Math.floor(ride.duration / 60);
             const sec = ride.duration % 60;
@@ -573,11 +603,12 @@
             gpxSummaryEl.innerHTML = `
                 <strong>Просмотр трека из истории</strong><br>
                 Дистанция: ${distKm} км | Время: ${min}:${sec.toString().padStart(2,'0')}<br>
-                Средняя: ${ride.avgSpeed.toFixed(1)} км/ч | Макс: ${ride.maxSpeed.toFixed(1)} км/ч | Набор: ${ride.climb} м
+                Средняя: ${ride.avgSpeed.toFixed(1)} км/ч | Макс: ${ride.maxSpeed.toFixed(1)} км/ч | Набор: ${ride.climb} м<br>
+                <span style="color:#aaa; font-size:11px;">🔴 0-5 | 🟠 5-12 | 🟡 12-20 | 🟢 20+ км/ч</span>
             `;
         }
 
-        // ---------- Загрузка GPX-файла ----------
+        // ---------- Загрузка GPX-файла с цветовым треком ----------
         function loadGpxFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -595,30 +626,46 @@
                     if (isNaN(lat) || isNaN(lon)) continue;
                     const ele = pt.getElementsByTagName('ele')[0]?.textContent;
                     const time = pt.getElementsByTagName('time')[0]?.textContent;
-                    points.push({ lat, lng: lon, alt: ele ? parseFloat(ele) : null, time });
+                    points.push({ lat, lng: lon, alt: ele ? parseFloat(ele) : null, time: time || null });
                 }
                 if (points.length < 2) {
                     alert('Слишком мало точек в GPX');
                     return;
                 }
-                // Отображаем на просмотровом слое
-                const coords = points.map(p => ol.proj.fromLonLat([p.lng, p.lat]));
-                viewTrackLine.setCoordinates(smoothLine(coords, 3));
-                const extent = viewTrackLine.getExtent();
-                map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 500 });
-                // Вычисляем сводку
-                let dist = 0;
+                viewTrackSource.clear();
+                document.querySelector('.tab-btn[data-tab="current"]').click();
+
                 for (let i = 1; i < points.length; i++) {
-                    dist += haversine(points[i-1], points[i]);
+                    const p1 = points[i-1];
+                    const p2 = points[i];
+                    const dist = haversine(p1, p2);
+                    let dt = 1;
+                    if (p1.time && p2.time) {
+                        dt = (new Date(p2.time) - new Date(p1.time)) / 1000;
+                        if (dt <= 0) dt = 1;
+                    }
+                    const speed = dist / dt * 3.6;
+                    const color = getSpeedColor(speed);
+                    const coords = [ol.proj.fromLonLat([p1.lng, p1.lat]), ol.proj.fromLonLat([p2.lng, p2.lat])];
+                    const segment = new ol.Feature({ geometry: new ol.geom.LineString(coords) });
+                    segment.setStyle(new ol.style.Style({
+                        stroke: new ol.style.Stroke({ color: color, width: 4, lineCap: 'round' })
+                    }));
+                    viewTrackSource.addFeature(segment);
                 }
+
+                const extent = viewTrackSource.getExtent();
+                map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 500 });
+
+                let dist = 0;
+                for (let i = 1; i < points.length; i++) dist += haversine(points[i-1], points[i]);
                 const distKm = (dist / 1000).toFixed(2);
                 gpxSummaryEl.style.display = 'block';
                 gpxSummaryEl.innerHTML = `
                     <strong>Загружен GPX-файл</strong><br>
-                    Дистанция: ${distKm} км | Точек: ${points.length}
+                    Дистанция: ${distKm} км | Точек: ${points.length}<br>
+                    <span style="color:#aaa; font-size:11px;">🔴 0-5 | 🟠 5-12 | 🟡 12-20 | 🟢 20+ км/ч</span>
                 `;
-                // Переключаем на вкладку "Поездка"
-                document.querySelector('.tab-btn[data-tab="current"]').click();
             };
             reader.readAsText(file);
         }
@@ -706,7 +753,6 @@
         }
         renderHistory();
 
-        // Функция экспорта всей истории (бекап) остаётся как раньше
         function exportAllHistory() {
             const history = getHistory();
             if (!history.length) { alert('Нет поездок'); return; }
