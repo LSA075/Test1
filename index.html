@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.5</title>
+    <title>Велокомпьютер v2.6 – просмотр GPX и треков из истории</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -40,6 +40,7 @@
         .history-item { background: linear-gradient(145deg, #1e1e1e, #181818); border-radius:8px; padding:10px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; font-size:13px; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
         .history-item .actions { display:flex; gap:4px; }
         .backup-btns { display:flex; gap:8px; margin-bottom:10px; }
+        .gpx-summary { background:#1a1a1a; border-radius:8px; padding:8px; margin:8px 0; font-size:12px; color:#aaa; display:none; }
     </style>
 </head>
 <body>
@@ -84,15 +85,19 @@
             <div style="display:flex; justify-content:flex-end; margin-top:8px;">
                 <button class="small" id="gpxCurrentBtn" disabled>GPX</button>
             </div>
+            <!-- Сводка по загруженному GPX -->
+            <div id="gpxSummary" class="gpx-summary"></div>
         </div>
         <div class="tab-content hidden" id="tab-history">
             <div class="backup-btns">
                 <button class="small" id="exportHistoryBtn">💾 Экспорт</button>
                 <button class="small" id="importHistoryBtn">📂 Импорт</button>
                 <button class="small" id="clearHistoryBtn">Очистить</button>
+                <button class="small" id="loadGpxBtn" style="background:#4CAF50;color:white;">📂 Загрузить GPX</button>
             </div>
             <div id="historyList"></div>
             <input type="file" id="importFileInput" accept=".json" style="display:none">
+            <input type="file" id="gpxFileInput" accept=".gpx" style="display:none">
         </div>
         <div class="controls">
             <button id="startBtn">▶ Старт</button>
@@ -103,7 +108,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <script>
-        // ======================  Велокомпьютер v2.5  ============================
+        // ======================  Велокомпьютер v2.6  ============================
 
         // ---------- Динамическая высота ----------
         function setLayout() {
@@ -116,7 +121,7 @@
         window.addEventListener('orientationchange', () => setTimeout(setLayout, 50));
         setLayout();
 
-        // ---------- Карта (спутник ESRI) ----------
+        // ---------- Карта ----------
         const satelliteLayer = new ol.layer.Tile({
             source: new ol.source.TileImage({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -132,13 +137,23 @@
         map.addControl(new ol.control.Zoom({ zoomInLabel: '+', zoomOutLabel: '−' }));
         map.addControl(new ol.control.Attribution({ collapsible: false }));
 
-        // ---------- Трек и маркер ----------
+        // ---------- Слои трека ----------
+        // Текущий трек (голубой)
         const trackLine = new ol.geom.LineString([]);
         const trackFeature = new ol.Feature({ geometry: trackLine });
         const trackSource = new ol.source.Vector({ features: [trackFeature] });
         map.addLayer(new ol.layer.Vector({
             source: trackSource,
             style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#0ff', width: 4 }) })
+        }));
+
+        // Просматриваемый трек (оранжевый)
+        const viewTrackLine = new ol.geom.LineString([]);
+        const viewTrackFeature = new ol.Feature({ geometry: viewTrackLine });
+        const viewTrackSource = new ol.source.Vector({ features: [viewTrackFeature] });
+        map.addLayer(new ol.layer.Vector({
+            source: viewTrackSource,
+            style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#FF9800', width: 4, lineDash: [8,4] }) })
         }));
 
         const markerFeature = new ol.Feature(new ol.geom.Point([0,0]));
@@ -154,13 +169,13 @@
         let totalClimb = 0, lastAltitude = null;
         let coordBuffer = [], lastFlush = 0;
         let speedHistory = [];
-        let rawTrackPoints = [];      // точные точки для GPX
-        let allRawPoints = [];        // все точки для полного трека
+        let rawTrackPoints = [];
+        let allRawPoints = [];
         let lastGpsTimestamp = null;
         let autoCenter = true;
 
-        const MIN_ACCURACY = 20;            // порог точности для учёта статистики
-        const MAX_ACCURACY_FOR_MAP = 100;   // добавляем на карту, если точность <= 100 м
+        const MIN_ACCURACY = 20;
+        const MAX_ACCURACY_FOR_MAP = 100;
         const MAX_SPEED_KMH = 100;
         const CHART_MAX_POINTS = 60;
 
@@ -186,6 +201,9 @@
         const exportHistoryBtn = document.getElementById('exportHistoryBtn');
         const importHistoryBtn = document.getElementById('importHistoryBtn');
         const importFileInput = document.getElementById('importFileInput');
+        const gpxFileInput = document.getElementById('gpxFileInput');
+        const loadGpxBtn = document.getElementById('loadGpxBtn');
+        const gpxSummaryEl = document.getElementById('gpxSummary');
         const chartCanvas = document.getElementById('speedChart');
 
         // ---------- Автоцентр ----------
@@ -195,7 +213,7 @@
             autoCenterBtn.textContent = autoCenter ? '🔒' : '🔓';
         });
 
-        // ---------- Таймер времени ----------
+        // ---------- Таймер ----------
         let timerInterval = null;
         function startTimer() { stopTimer(); timerInterval = setInterval(updateTimeDisplay, 1000); }
         function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
@@ -239,7 +257,7 @@
             .catch(() => netStatusEl.textContent = 'Сеть: нет ответа');
         }
 
-        // ---------- График скорости ----------
+        // ---------- График ----------
         let chartData = [];
         function updateChart(speedKmh) {
             chartData.push(speedKmh);
@@ -274,7 +292,7 @@
             ctx.fill();
         }
 
-        // ---------- Сглаживание линии трека ----------
+        // ---------- Сглаживание ----------
         function smoothLine(coords, windowSize = 3) {
             if (!coords || coords.length < windowSize) return coords;
             const smoothed = [];
@@ -298,7 +316,7 @@
             lastFlush = Date.now();
         }
 
-        // ---------- Гео-утилиты ----------
+        // ---------- Утилиты ----------
         function toRad(d) { return d * Math.PI / 180; }
         function haversine(p1, p2) {
             const R = 6371e3;
@@ -307,7 +325,7 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // ---------- Обработка GPS ----------
+        // ---------- GPS ----------
         function processPosition(pos) {
             lastGpsTimestamp = pos.timestamp;
             const accuracy = pos.coords.accuracy;
@@ -382,14 +400,13 @@
             gpsAgeEl.textContent = `GPS: ошибка (${err.message})`;
         }
 
-        // ---------- Управление поездкой ----------
+        // ---------- Управление ----------
         function startTrip() {
             if (!navigator.geolocation) return;
             startBtn.disabled = true;
             startBtn.textContent = '⏳';
             curSpeedEl.textContent = '0';
             chartData = []; drawChart();
-
             setTimeout(() => {
                 navigator.geolocation.getCurrentPosition(pos => {
                     isRecording = true; isPaused = false;
@@ -401,11 +418,9 @@
                     trackLine.setCoordinates([]);
                     coordBuffer = []; lastFlush = Date.now();
                     lastGpsTimestamp = pos.timestamp;
-
                     const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
                     markerFeature.setGeometry(new ol.geom.Point(coord));
                     map.getView().setCenter(coord);
-
                     gpsAccuracyEl.textContent = 'Точность: запрос...';
                     gpsPointsEl.textContent = 'Точек: 0';
                     startAgeUpdater();
@@ -481,7 +496,7 @@
             pauseBtn.style.background = isPaused ? '#ff9800' : '#f44336';
         }
 
-        // ---------- Экспорт GPX (с временем) ----------
+        // ---------- Экспорт GPX ----------
         function generateGPX(points) {
             if (!points || points.length < 2) return null;
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -508,7 +523,7 @@
             if (gpx) downloadGPX(gpx); else alert('Недостаточно точек');
         }
 
-        // ---------- История (localStorage) ----------
+        // ---------- История ----------
         const HISTORY_KEY = 'velo_rides_v2';
         function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; } }
         function saveRide(ride) {
@@ -534,28 +549,76 @@
             else alert('Нет данных трека');
         }
 
-        // ---------- Бекап всей истории ----------
-        function exportAllHistory() {
+        // ---------- Отображение трека из истории ----------
+        function showHistoryTrack(index) {
             const history = getHistory();
-            if (!history.length) { alert('Нет поездок'); return; }
-            const json = JSON.stringify(history, null, 2);
-            const blob = new Blob([json], {type: 'application/json'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'velo_backup.json';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            const ride = history[index];
+            if (!ride || !ride.track || ride.track.length < 2) {
+                alert('Недостаточно точек для отображения');
+                return;
+            }
+            // Переключаемся на вкладку "Поездка"
+            document.querySelector('.tab-btn[data-tab="current"]').click();
+            // Отрисовываем трек на просмотровом слое
+            const coords = ride.track.map(p => ol.proj.fromLonLat([p.lng, p.lat]));
+            viewTrackLine.setCoordinates(smoothLine(coords, 3));
+            // Центрируем карту на трек
+            const extent = viewTrackLine.getExtent();
+            map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 500 });
+            // Краткая сводка
+            const distKm = (ride.distance / 1000).toFixed(2);
+            const min = Math.floor(ride.duration / 60);
+            const sec = ride.duration % 60;
+            gpxSummaryEl.style.display = 'block';
+            gpxSummaryEl.innerHTML = `
+                <strong>Просмотр трека из истории</strong><br>
+                Дистанция: ${distKm} км | Время: ${min}:${sec.toString().padStart(2,'0')}<br>
+                Средняя: ${ride.avgSpeed.toFixed(1)} км/ч | Макс: ${ride.maxSpeed.toFixed(1)} км/ч | Набор: ${ride.climb} м
+            `;
         }
-        function importAllHistory(file) {
+
+        // ---------- Загрузка GPX-файла ----------
+        function loadGpxFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (!Array.isArray(data)) throw new Error('Неверный формат');
-                    data.forEach(ride => { if (!ride.date || typeof ride.distance !== 'number') throw new Error('Неверная структура'); });
-                    localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                    renderHistory();
-                    alert('История импортирована');
-                } catch (err) { alert('Ошибка: ' + err.message); }
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(e.target.result, 'text/xml');
+                const trkpts = xml.getElementsByTagName('trkpt');
+                if (!trkpts.length) {
+                    alert('Не найден сегмент трека в GPX');
+                    return;
+                }
+                const points = [];
+                for (let pt of trkpts) {
+                    const lat = parseFloat(pt.getAttribute('lat'));
+                    const lon = parseFloat(pt.getAttribute('lon'));
+                    if (isNaN(lat) || isNaN(lon)) continue;
+                    const ele = pt.getElementsByTagName('ele')[0]?.textContent;
+                    const time = pt.getElementsByTagName('time')[0]?.textContent;
+                    points.push({ lat, lng: lon, alt: ele ? parseFloat(ele) : null, time });
+                }
+                if (points.length < 2) {
+                    alert('Слишком мало точек в GPX');
+                    return;
+                }
+                // Отображаем на просмотровом слое
+                const coords = points.map(p => ol.proj.fromLonLat([p.lng, p.lat]));
+                viewTrackLine.setCoordinates(smoothLine(coords, 3));
+                const extent = viewTrackLine.getExtent();
+                map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 500 });
+                // Вычисляем сводку
+                let dist = 0;
+                for (let i = 1; i < points.length; i++) {
+                    dist += haversine(points[i-1], points[i]);
+                }
+                const distKm = (dist / 1000).toFixed(2);
+                gpxSummaryEl.style.display = 'block';
+                gpxSummaryEl.innerHTML = `
+                    <strong>Загружен GPX-файл</strong><br>
+                    Дистанция: ${distKm} км | Точек: ${points.length}
+                `;
+                // Переключаем на вкладку "Поездка"
+                document.querySelector('.tab-btn[data-tab="current"]').click();
             };
             reader.readAsText(file);
         }
@@ -584,6 +647,7 @@
                         <div style="font-size:11px; color:#aaa;">Ср. ${ride.avgSpeed.toFixed(1)} км/ч, макс ${ride.maxSpeed.toFixed(1)}, набор ${ride.climb} м</div>
                     </div>
                     <div class="actions">
+                        <button class="small" onclick="showHistoryTrack(${idx})">🗺 Показать</button>
                         <button class="small" onclick="exportHistoryGPX(${idx})">GPX</button>
                         <button class="small" onclick="deleteRide(${idx})">✕</button>
                     </div>
@@ -611,8 +675,15 @@
         clearHistoryBtn.addEventListener('click', clearHistory);
         exportHistoryBtn.addEventListener('click', exportAllHistory);
         importHistoryBtn.addEventListener('click', () => importFileInput.click());
+        loadGpxBtn.addEventListener('click', () => gpxFileInput.click());
         importFileInput.addEventListener('change', (e) => {
             if (e.target.files.length) { importAllHistory(e.target.files[0]); e.target.value = ''; }
+        });
+        gpxFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                loadGpxFile(e.target.files[0]);
+                e.target.value = '';
+            }
         });
         centerBtn.addEventListener('click', () => {
             if (!navigator.geolocation) return;
@@ -634,6 +705,32 @@
             }, () => {}, { enableHighAccuracy: true });
         }
         renderHistory();
+
+        // Функция экспорта всей истории (бекап) остаётся как раньше
+        function exportAllHistory() {
+            const history = getHistory();
+            if (!history.length) { alert('Нет поездок'); return; }
+            const json = JSON.stringify(history, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'velo_backup.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        function importAllHistory(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) throw new Error('Неверный формат');
+                    data.forEach(ride => { if (!ride.date || typeof ride.distance !== 'number') throw new Error('Неверная структура'); });
+                    localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+                    renderHistory();
+                    alert('История импортирована');
+                } catch (err) { alert('Ошибка: ' + err.message); }
+            };
+            reader.readAsText(file);
+        }
     </script>
 </body>
 </html>
