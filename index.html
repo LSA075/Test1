@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.7 – цветной трек по скорости</title>
+    <title>Велокомпьютер v2.8 – очистка трека, имена с датой</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -85,7 +85,9 @@
             <div style="display:flex; justify-content:flex-end; margin-top:8px;">
                 <button class="small" id="gpxCurrentBtn" disabled>GPX</button>
             </div>
-            <div id="gpxSummary" class="gpx-summary"></div>
+            <div id="gpxSummary" class="gpx-summary">
+                <!-- сюда добавляется кнопка "Очистить" -->
+            </div>
         </div>
         <div class="tab-content hidden" id="tab-history">
             <div class="backup-btns">
@@ -107,7 +109,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <script>
-        // ======================  Велокомпьютер v2.7  ============================
+        // ======================  Велокомпьютер v2.8  ============================
 
         // ---------- Динамическая высота ----------
         function setLayout() {
@@ -145,7 +147,6 @@
             style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#0ff', width: 4 }) })
         }));
 
-        // Просматриваемый трек (будет состоять из отдельных цветных сегментов)
         const viewTrackSource = new ol.source.Vector();
         map.addLayer(new ol.layer.Vector({ source: viewTrackSource }));
 
@@ -318,12 +319,18 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // ---------- Цвет по скорости ----------
         function getSpeedColor(speedKmh) {
-            if (speedKmh < 5) return '#FF0000';   // красный
-            if (speedKmh < 12) return '#FF8800';  // оранжевый
-            if (speedKmh < 20) return '#FFDD00';  // жёлтый
-            return '#00CC44';                      // салатовый
+            if (speedKmh < 5) return '#FF0000';
+            if (speedKmh < 12) return '#FF8800';
+            if (speedKmh < 20) return '#FFDD00';
+            return '#00CC44';
+        }
+
+        // ---------- Очистка просматриваемого трека ----------
+        function clearViewedTrack() {
+            viewTrackSource.clear();
+            gpxSummaryEl.style.display = 'none';
+            gpxSummaryEl.innerHTML = '';
         }
 
         // ---------- GPS ----------
@@ -511,17 +518,25 @@
             gpx += '  </trkseg></trk>\n</gpx>';
             return gpx;
         }
-        function downloadGPX(gpxString) {
+        function downloadGPX(gpxString, filename = 'track.gpx') {
             const blob = new Blob([gpxString], {type: 'application/gpx+xml'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = 'track.gpx';
+            a.href = url;
+            a.download = filename;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        function formatDateForFilename(ts) {
+            const d = new Date(ts);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+        }
         function exportCurrentGPX() {
             const gpx = generateGPX(rawTrackPoints);
-            if (gpx) downloadGPX(gpx); else alert('Недостаточно точек');
+            if (!gpx) { alert('Недостаточно точек'); return; }
+            const filename = tripStart ? formatDateForFilename(tripStart) + '.gpx' : 'track.gpx';
+            downloadGPX(gpx, filename);
         }
 
         // ---------- История ----------
@@ -546,11 +561,15 @@
         }
         function exportHistoryGPX(index) {
             const history = getHistory();
-            if (history[index]?.track) downloadGPX(generateGPX(history[index].track));
-            else alert('Нет данных трека');
+            const ride = history[index];
+            if (!ride?.track) { alert('Нет данных трека'); return; }
+            const gpx = generateGPX(ride.track);
+            if (!gpx) return;
+            const filename = formatDateForFilename(ride.date) + '.gpx';
+            downloadGPX(gpx, filename);
         }
 
-        // ---------- Отображение трека из истории (с цветом по скорости) ----------
+        // ---------- Отображение трека из истории ----------
         function showHistoryTrack(index) {
             const history = getHistory();
             const ride = history[index];
@@ -562,7 +581,6 @@
             document.querySelector('.tab-btn[data-tab="current"]').click();
 
             const points = ride.track;
-            // Вычисляем скорости между точками
             for (let i = 0; i < points.length; i++) {
                 const p = points[i];
                 let speed = 0;
@@ -579,7 +597,6 @@
                 p._calcSpeed = speed;
             }
 
-            // Строим цветные отрезки
             for (let i = 1; i < points.length; i++) {
                 const p1 = points[i-1];
                 const p2 = points[i];
@@ -605,10 +622,11 @@
                 Дистанция: ${distKm} км | Время: ${min}:${sec.toString().padStart(2,'0')}<br>
                 Средняя: ${ride.avgSpeed.toFixed(1)} км/ч | Макс: ${ride.maxSpeed.toFixed(1)} км/ч | Набор: ${ride.climb} м<br>
                 <span style="color:#aaa; font-size:11px;">🔴 0-5 | 🟠 5-12 | 🟡 12-20 | 🟢 20+ км/ч</span>
+                <div style="margin-top:6px;"><button class="small" onclick="clearViewedTrack()">❌ Очистить</button></div>
             `;
         }
 
-        // ---------- Загрузка GPX-файла с цветовым треком ----------
+        // ---------- Загрузка GPX-файла ----------
         function loadGpxFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -665,6 +683,7 @@
                     <strong>Загружен GPX-файл</strong><br>
                     Дистанция: ${distKm} км | Точек: ${points.length}<br>
                     <span style="color:#aaa; font-size:11px;">🔴 0-5 | 🟠 5-12 | 🟡 12-20 | 🟢 20+ км/ч</span>
+                    <div style="margin-top:6px;"><button class="small" onclick="clearViewedTrack()">❌ Очистить</button></div>
                 `;
             };
             reader.readAsText(file);
@@ -759,8 +778,11 @@
             const json = JSON.stringify(history, null, 2);
             const blob = new Blob([json], {type: 'application/json'});
             const a = document.createElement('a');
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const filename = `velo_backup_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
+            a.download = filename;
             a.href = URL.createObjectURL(blob);
-            a.download = 'velo_backup.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
         function importAllHistory(file) {
