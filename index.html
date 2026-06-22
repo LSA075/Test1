@@ -3,43 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-    <title>Велокомпьютер v2.8 – очистка трека, имена с датой</title>
+    <title>Велокомпьютер v2.8</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: 'Helvetica Neue', sans-serif; background: #000; color: #fff; overflow: hidden; position: fixed; top:0; left:0; right:0; bottom:0; }
+
+        /* Карта */
         #map { position: absolute; top:0; left:0; right:0; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+
+        /* Кнопки управления картой */
         .map-controls { position: absolute; bottom:15px; right:15px; z-index:1000; display: flex; flex-direction: column; gap: 8px; }
         .center-btn, .auto-center-btn { width:44px; height:44px; border-radius:50%; background: rgba(30,30,30,0.85); backdrop-filter: blur(10px); border:1px solid rgba(255,255,255,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; color:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.5); }
         .auto-center-btn { font-size:20px; }
         .auto-center-btn.active { background: rgba(76,175,80,0.7); }
+
+        /* Статусная панель (GPS, сеть) */
         .status-panel { position: absolute; top:10px; right:10px; z-index:1000; display: flex; flex-direction: column; gap:4px; align-items: flex-end; }
         .status-box { background: rgba(20,20,20,0.75); backdrop-filter: blur(6px); border-radius:10px; padding:6px 10px; font-size:12px; color:#ccc; border:1px solid rgba(255,255,255,0.2); white-space:nowrap; }
+
+        /* Нижняя панель */
         .dashboard { position: absolute; left:0; right:0; bottom:0; background:#111; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -5px 15px rgba(0,0,0,0.6); }
         .tab-bar { display:flex; border-bottom:1px solid #333; background:#1a1a1a; }
         .tab-btn { flex:1; background:transparent; color:#aaa; border:none; padding:12px; font-size:16px; cursor:pointer; text-align:center; }
         .tab-btn.active { color:#fff; border-bottom:2px solid #4CAF50; background:#111; }
         .tab-content { flex:1; overflow-y:auto; padding:12px; }
         .hidden { display:none !important; }
+
+        /* Статистика */
         .stats-panel { background: linear-gradient(145deg, #1e1e1e, #181818); border-radius:12px; padding:10px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.4); }
         .stats-row { display:flex; justify-content:space-around; margin-bottom:8px; }
         .stats-row:last-child { margin-bottom:0; }
         .stat-cell { text-align:center; flex:1; }
         .stat-value { font-size:26px; font-weight:bold; }
         .stat-label { font-size:11px; color:#aaa; margin-top:2px; }
+
+        /* График скорости */
         .speed-chart-container { background:#1a1a1a; border-radius:10px; padding:8px; margin-top:8px; }
         canvas { width:100%; height:auto; display:block; border-radius:6px; }
+
+        /* Монитор GPS */
         .gps-monitor { display:flex; justify-content:space-between; font-size:12px; color:#aaa; margin-top:6px; padding:0 4px; }
+
+        /* Кнопки управления записью */
         .controls { display:flex; justify-content:center; gap:12px; padding:10px; background:#111; border-top:1px solid #333; }
         button { font-size:15px; padding:8px 18px; border:none; border-radius:20px; background:#4CAF50; color:#fff; cursor:pointer; font-weight:600; box-shadow:0 2px 5px rgba(0,0,0,0.3); }
         button:active { transform:scale(0.95); }
         button:disabled { background:#555; box-shadow:none; }
         button.stop { background:#f44336; }
         button.small { font-size:12px; padding:4px 12px; background:#333; margin-left:5px; }
+
+        /* История */
         .history-date { font-size:13px; font-weight:bold; margin:12px 0 5px; color:#ccc; border-bottom:1px solid #333; padding-bottom:3px; }
         .history-item { background: linear-gradient(145deg, #1e1e1e, #181818); border-radius:8px; padding:10px; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; font-size:13px; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
         .history-item .actions { display:flex; gap:4px; }
         .backup-btns { display:flex; gap:8px; margin-bottom:10px; }
+
+        /* Сводка по GPX */
         .gpx-summary { background:#1a1a1a; border-radius:8px; padding:8px; margin:8px 0; font-size:12px; color:#aaa; display:none; }
     </style>
 </head>
@@ -62,6 +82,8 @@
             <button class="tab-btn active" data-tab="current">Поездка</button>
             <button class="tab-btn" data-tab="history">История</button>
         </div>
+
+        <!-- Вкладка "Поездка" -->
         <div class="tab-content" id="tab-current">
             <div class="stats-panel">
                 <div class="stats-row">
@@ -85,10 +107,10 @@
             <div style="display:flex; justify-content:flex-end; margin-top:8px;">
                 <button class="small" id="gpxCurrentBtn" disabled>GPX</button>
             </div>
-            <div id="gpxSummary" class="gpx-summary">
-                <!-- сюда добавляется кнопка "Очистить" -->
-            </div>
+            <div id="gpxSummary" class="gpx-summary"></div>
         </div>
+
+        <!-- Вкладка "История" -->
         <div class="tab-content hidden" id="tab-history">
             <div class="backup-btns">
                 <button class="small" id="exportHistoryBtn">💾 Экспорт</button>
@@ -100,6 +122,8 @@
             <input type="file" id="importFileInput" accept=".json" style="display:none">
             <input type="file" id="gpxFileInput" accept=".gpx" style="display:none">
         </div>
+
+        <!-- Кнопки управления -->
         <div class="controls">
             <button id="startBtn">▶ Старт</button>
             <button id="pauseBtn" disabled>⏸ Пауза</button>
@@ -111,7 +135,9 @@
     <script>
         // ======================  Велокомпьютер v2.8  ============================
 
-        // ---------- Динамическая высота ----------
+        // --------------------------- 1. Инициализация ---------------------------
+
+        // Подстройка высоты карты и панели
         function setLayout() {
             const h = window.innerHeight || document.documentElement.clientHeight;
             const mapHeight = Math.floor(h * 0.6);
@@ -122,7 +148,7 @@
         window.addEventListener('orientationchange', () => setTimeout(setLayout, 50));
         setLayout();
 
-        // ---------- Карта ----------
+        // Карта (спутник ESRI)
         const satelliteLayer = new ol.layer.Tile({
             source: new ol.source.TileImage({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -138,7 +164,7 @@
         map.addControl(new ol.control.Zoom({ zoomInLabel: '+', zoomOutLabel: '−' }));
         map.addControl(new ol.control.Attribution({ collapsible: false }));
 
-        // ---------- Слои трека ----------
+        // Слои для текущего трека (голубой) и просматриваемого (цветной)
         const trackLine = new ol.geom.LineString([]);
         const trackFeature = new ol.Feature({ geometry: trackLine });
         const trackSource = new ol.source.Vector({ features: [trackFeature] });
@@ -146,25 +172,26 @@
             source: trackSource,
             style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#0ff', width: 4 }) })
         }));
-
         const viewTrackSource = new ol.source.Vector();
         map.addLayer(new ol.layer.Vector({ source: viewTrackSource }));
 
+        // Маркер текущей позиции
         const markerFeature = new ol.Feature(new ol.geom.Point([0,0]));
         markerFeature.setStyle(new ol.style.Style({
             image: new ol.style.Circle({ radius: 8, fill: new ol.style.Fill({ color: '#ff0' }), stroke: new ol.style.Stroke({ color: '#000', width: 1 }) })
         }));
         map.addLayer(new ol.layer.Vector({ source: new ol.source.Vector({ features: [markerFeature] }) }));
 
-        // ---------- Состояние ----------
+        // --------------------------- 2. Глобальные переменные ---------------------------
+
         let isRecording = false, isPaused = false, watchId = null;
         let tripStart = null, totalDist = 0, lastPoint = null;
         let maxSpeed = 0, speedSum = 0, speedCount = 0;
         let totalClimb = 0, lastAltitude = null;
         let coordBuffer = [], lastFlush = 0;
         let speedHistory = [];
-        let rawTrackPoints = [];
-        let allRawPoints = [];
+        let rawTrackPoints = [];        // точные точки для GPX
+        let allRawPoints = [];          // все точки для полного трека
         let lastGpsTimestamp = null;
         let autoCenter = true;
 
@@ -200,14 +227,54 @@
         const gpxSummaryEl = document.getElementById('gpxSummary');
         const chartCanvas = document.getElementById('speedChart');
 
-        // ---------- Автоцентр ----------
-        autoCenterBtn.addEventListener('click', () => {
-            autoCenter = !autoCenter;
-            autoCenterBtn.classList.toggle('active', autoCenter);
-            autoCenterBtn.textContent = autoCenter ? '🔒' : '🔓';
-        });
+        // --------------------------- 3. Утилиты ---------------------------
 
-        // ---------- Таймер ----------
+        function toRad(d) { return d * Math.PI / 180; }
+        function haversine(p1, p2) {
+            const R = 6371e3;
+            const dLat = toRad(p2.lat - p1.lat), dLon = toRad(p2.lng - p1.lng);
+            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(p1.lat))*Math.cos(toRad(p2.lat))*Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function getSpeedColor(speedKmh) {
+            if (speedKmh < 5) return '#FF0000';   // красный
+            if (speedKmh < 12) return '#FF8800';  // оранжевый
+            if (speedKmh < 20) return '#FFDD00';  // жёлтый
+            return '#00CC44';                      // салатовый
+        }
+
+        // Сглаживание линии трека
+        function smoothLine(coords, windowSize = 3) {
+            if (!coords || coords.length < windowSize) return coords;
+            const smoothed = [];
+            for (let i = 0; i < coords.length; i++) {
+                const start = Math.max(0, i - Math.floor(windowSize / 2));
+                const end = Math.min(coords.length - 1, i + Math.floor(windowSize / 2));
+                let sumLon = 0, sumLat = 0;
+                for (let j = start; j <= end; j++) { sumLon += coords[j][0]; sumLat += coords[j][1]; }
+                const count = end - start + 1;
+                smoothed.push([sumLon / count, sumLat / count]);
+            }
+            return smoothed;
+        }
+
+        // Очистка просматриваемого трека
+        function clearViewedTrack() {
+            viewTrackSource.clear();
+            gpxSummaryEl.style.display = 'none';
+            gpxSummaryEl.innerHTML = '';
+        }
+
+        // Форматирование даты для имён файлов
+        function formatDateForFilename(ts) {
+            const d = new Date(ts);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+        }
+
+        // --------------------------- 4. Таймер времени и возраст GPS ---------------------------
+
         let timerInterval = null;
         function startTimer() { stopTimer(); timerInterval = setInterval(updateTimeDisplay, 1000); }
         function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
@@ -217,7 +284,6 @@
             curTimeEl.textContent = new Date(sec * 1000).toISOString().substr(14, 5);
         }
 
-        // ---------- Возраст GPS ----------
         let ageUpdateInterval = null;
         function startAgeUpdater() {
             if (ageUpdateInterval) clearInterval(ageUpdateInterval);
@@ -233,7 +299,8 @@
             gpsAgeEl.textContent = `GPS: ${age}с`;
         }
 
-        // ---------- Сеть ----------
+        // --------------------------- 5. Сеть ---------------------------
+
         let networkInterval = null;
         function startNetworkMonitor() {
             if (networkInterval) clearInterval(networkInterval);
@@ -251,7 +318,8 @@
             .catch(() => netStatusEl.textContent = 'Сеть: нет ответа');
         }
 
-        // ---------- График ----------
+        // --------------------------- 6. График скорости ---------------------------
+
         let chartData = [];
         function updateChart(speedKmh) {
             chartData.push(speedKmh);
@@ -286,54 +354,8 @@
             ctx.fill();
         }
 
-        // ---------- Сглаживание ----------
-        function smoothLine(coords, windowSize = 3) {
-            if (!coords || coords.length < windowSize) return coords;
-            const smoothed = [];
-            for (let i = 0; i < coords.length; i++) {
-                const start = Math.max(0, i - Math.floor(windowSize / 2));
-                const end = Math.min(coords.length - 1, i + Math.floor(windowSize / 2));
-                let sumLon = 0, sumLat = 0;
-                for (let j = start; j <= end; j++) { sumLon += coords[j][0]; sumLat += coords[j][1]; }
-                const count = end - start + 1;
-                smoothed.push([sumLon / count, sumLat / count]);
-            }
-            return smoothed;
-        }
+        // --------------------------- 7. Обработка GPS и трек ---------------------------
 
-        function flushTrackBuffer() {
-            if (coordBuffer.length === 0) return;
-            const currentCoords = trackLine.getCoordinates();
-            coordBuffer.forEach(c => currentCoords.push([c[0], c[1]]));
-            trackLine.setCoordinates(smoothLine(currentCoords, 3));
-            coordBuffer = [];
-            lastFlush = Date.now();
-        }
-
-        // ---------- Утилиты ----------
-        function toRad(d) { return d * Math.PI / 180; }
-        function haversine(p1, p2) {
-            const R = 6371e3;
-            const dLat = toRad(p2.lat - p1.lat), dLon = toRad(p2.lng - p1.lng);
-            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(p1.lat))*Math.cos(toRad(p2.lat))*Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
-        function getSpeedColor(speedKmh) {
-            if (speedKmh < 5) return '#FF0000';
-            if (speedKmh < 12) return '#FF8800';
-            if (speedKmh < 20) return '#FFDD00';
-            return '#00CC44';
-        }
-
-        // ---------- Очистка просматриваемого трека ----------
-        function clearViewedTrack() {
-            viewTrackSource.clear();
-            gpxSummaryEl.style.display = 'none';
-            gpxSummaryEl.innerHTML = '';
-        }
-
-        // ---------- GPS ----------
         function processPosition(pos) {
             lastGpsTimestamp = pos.timestamp;
             const accuracy = pos.coords.accuracy;
@@ -390,6 +412,15 @@
             }
         }
 
+        function flushTrackBuffer() {
+            if (coordBuffer.length === 0) return;
+            const currentCoords = trackLine.getCoordinates();
+            coordBuffer.forEach(c => currentCoords.push([c[0], c[1]]));
+            trackLine.setCoordinates(smoothLine(currentCoords, 3));
+            coordBuffer = [];
+            lastFlush = Date.now();
+        }
+
         function addTrackPoint(lon, lat) {
             if (coordBuffer.length >= 3 || (coordBuffer.length && Date.now() - lastFlush > 2000)) flushTrackBuffer();
             const coord = ol.proj.fromLonLat([lon, lat]);
@@ -403,12 +434,14 @@
             if (coordBuffer.length && (coordBuffer.length >= 3 || Date.now() - lastFlush > 2000))
                 addTrackPoint(pos.coords.longitude, pos.coords.latitude);
         }
+
         function onGPSError(err) {
             console.warn('GPS error', err.message);
             gpsAgeEl.textContent = `GPS: ошибка (${err.message})`;
         }
 
-        // ---------- Управление ----------
+        // --------------------------- 8. Управление записью ---------------------------
+
         function startTrip() {
             if (!navigator.geolocation) return;
             startBtn.disabled = true;
@@ -455,6 +488,7 @@
             stopTimer(); stopAgeUpdater();
             updateButtons();
         }
+
         function resumeTrip() {
             if (!isRecording || !isPaused) return;
             isPaused = false;
@@ -463,6 +497,7 @@
             startTimer(); startAgeUpdater();
             updateButtons();
         }
+
         function stopTrip() {
             if (isRecording) {
                 saveRide({
@@ -504,7 +539,8 @@
             pauseBtn.style.background = isPaused ? '#ff9800' : '#f44336';
         }
 
-        // ---------- Экспорт GPX ----------
+        // --------------------------- 9. Экспорт GPX ---------------------------
+
         function generateGPX(points) {
             if (!points || points.length < 2) return null;
             let gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -518,6 +554,7 @@
             gpx += '  </trkseg></trk>\n</gpx>';
             return gpx;
         }
+
         function downloadGPX(gpxString, filename = 'track.gpx') {
             const blob = new Blob([gpxString], {type: 'application/gpx+xml'});
             const url = URL.createObjectURL(blob);
@@ -527,11 +564,7 @@
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        function formatDateForFilename(ts) {
-            const d = new Date(ts);
-            const pad = n => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
-        }
+
         function exportCurrentGPX() {
             const gpx = generateGPX(rawTrackPoints);
             if (!gpx) { alert('Недостаточно точек'); return; }
@@ -539,9 +572,12 @@
             downloadGPX(gpx, filename);
         }
 
-        // ---------- История ----------
+        // --------------------------- 10. История (localStorage) ---------------------------
+
         const HISTORY_KEY = 'velo_rides_v2';
+
         function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; } }
+
         function saveRide(ride) {
             const history = getHistory();
             if (ride.track && ride.track.length > 5000)
@@ -551,14 +587,17 @@
             localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
             renderHistory();
         }
+
         function deleteRide(index) {
             const history = getHistory(); history.splice(index, 1);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
             renderHistory();
         }
+
         function clearHistory() {
             if (confirm('Удалить всю историю?')) { localStorage.removeItem(HISTORY_KEY); renderHistory(); }
         }
+
         function exportHistoryGPX(index) {
             const history = getHistory();
             const ride = history[index];
@@ -569,7 +608,7 @@
             downloadGPX(gpx, filename);
         }
 
-        // ---------- Отображение трека из истории ----------
+        // Отображение трека из истории (цветной по скорости)
         function showHistoryTrack(index) {
             const history = getHistory();
             const ride = history[index];
@@ -626,7 +665,7 @@
             `;
         }
 
-        // ---------- Загрузка GPX-файла ----------
+        // Загрузка GPX-файла с цветовым треком
         function loadGpxFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -689,7 +728,7 @@
             reader.readAsText(file);
         }
 
-        // ---------- Отрисовка истории ----------
+        // Отрисовка списка истории
         function renderHistory() {
             const history = getHistory();
             if (!history.length) {
@@ -722,7 +761,9 @@
             historyListEl.innerHTML = html;
         }
 
-        // ---------- Вкладки ----------
+        // --------------------------- 11. Обработчики вкладок и кнопок ---------------------------
+
+        // Переключение вкладок
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -733,46 +774,26 @@
             });
         });
 
-        // ---------- Кнопки ----------
+        // Автоцентр
+        autoCenterBtn.addEventListener('click', () => {
+            autoCenter = !autoCenter;
+            autoCenterBtn.classList.toggle('active', autoCenter);
+            autoCenterBtn.textContent = autoCenter ? '🔒' : '🔓';
+        });
+
+        // Кнопки записи
         startBtn.addEventListener('click', startTrip);
         pauseBtn.addEventListener('click', () => isPaused ? resumeTrip() : pauseTrip());
         resetBtn.addEventListener('click', stopTrip);
+
+        // Экспорт текущего GPX
         gpxCurrentBtn.addEventListener('click', exportCurrentGPX);
+
+        // Очистка истории
         clearHistoryBtn.addEventListener('click', clearHistory);
-        exportHistoryBtn.addEventListener('click', exportAllHistory);
-        importHistoryBtn.addEventListener('click', () => importFileInput.click());
-        loadGpxBtn.addEventListener('click', () => gpxFileInput.click());
-        importFileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) { importAllHistory(e.target.files[0]); e.target.value = ''; }
-        });
-        gpxFileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) {
-                loadGpxFile(e.target.files[0]);
-                e.target.value = '';
-            }
-        });
-        centerBtn.addEventListener('click', () => {
-            if (!navigator.geolocation) return;
-            navigator.geolocation.getCurrentPosition(pos => {
-                const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
-                map.getView().animate({ center: coord, duration: 500 });
-                markerFeature.setGeometry(new ol.geom.Point(coord));
-            }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
-        });
 
-        // ---------- Инициализация ----------
-        startNetworkMonitor();
-        stopAgeUpdater();
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-                const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
-                map.getView().setCenter(coord);
-                markerFeature.setGeometry(new ol.geom.Point(coord));
-            }, () => {}, { enableHighAccuracy: true });
-        }
-        renderHistory();
-
-        function exportAllHistory() {
+        // Экспорт / импорт всей истории (бекап)
+        exportHistoryBtn.addEventListener('click', () => {
             const history = getHistory();
             if (!history.length) { alert('Нет поездок'); return; }
             const json = JSON.stringify(history, null, 2);
@@ -784,12 +805,16 @@
             a.download = filename;
             a.href = URL.createObjectURL(blob);
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        }
-        function importAllHistory(file) {
+        });
+
+        importHistoryBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = (ev) => {
                 try {
-                    const data = JSON.parse(e.target.result);
+                    const data = JSON.parse(ev.target.result);
                     if (!Array.isArray(data)) throw new Error('Неверный формат');
                     data.forEach(ride => { if (!ride.date || typeof ride.distance !== 'number') throw new Error('Неверная структура'); });
                     localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
@@ -798,7 +823,39 @@
                 } catch (err) { alert('Ошибка: ' + err.message); }
             };
             reader.readAsText(file);
+            e.target.value = '';
+        });
+
+        // Загрузка GPX
+        loadGpxBtn.addEventListener('click', () => gpxFileInput.click());
+        gpxFileInput.addEventListener('change', (e) => {
+            if (!e.target.files.length) return;
+            loadGpxFile(e.target.files[0]);
+            e.target.value = '';
+        });
+
+        // Центрирование карты по GPS
+        centerBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(pos => {
+                const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+                map.getView().animate({ center: coord, duration: 500 });
+                markerFeature.setGeometry(new ol.geom.Point(coord));
+            }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
+        });
+
+        // --------------------------- 12. Старт ---------------------------
+
+        startNetworkMonitor();
+        stopAgeUpdater();
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                const coord = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+                map.getView().setCenter(coord);
+                markerFeature.setGeometry(new ol.geom.Point(coord));
+            }, () => {}, { enableHighAccuracy: true });
         }
+        renderHistory();
     </script>
 </body>
 </html>
